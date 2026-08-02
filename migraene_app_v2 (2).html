@@ -570,12 +570,12 @@ function dateKey(d) {
 }
 
 // ── GOOGLE DRIVE SYNC ────────────────────────────────────
-const DRIVE_FILE_NAME = 'migraine_diary_data.json'; // Englischer Name von deinem Drive!
+const DRIVE_FILE_NAME = 'migraine_diary_data.json'; // An deinen Drive-Namen angepasst!
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.appdata';
 const CLIENT_ID = '799152036238-rgv5m6ng5ut359d52vepf34t4f1e3jud.apps.googleusercontent.com';
-const API_KEY = 'AIzaSyBf9rsnVp2MamWObWe75rCtMRbCsccbdjQ'; // <-- HIER DEINEN API KEY EINTRAGEN!
+const API_KEY = 'AIzaSyBf9rsnVp2MamWObWe75rCtMRbCsccbdjQ'; // <-- HIER DEINEN GOOGLE CLOUD API KEY EINTRAGEN!
 
-const AUTHORIZED_ORIGIN = 'https://lukfly.github.io';
+const AUTHORIZED_ORIGIN = 'https://lukfly.github.io'; 
 let gisClient = null;
 let driveFileId = null;
 let memCache = {}; 
@@ -748,6 +748,7 @@ function checkSundayBanner() {
   const banner = document.getElementById('sunday-banner');
   if (banner) banner.style.display = (isSunday && isEvening) ? 'block' : 'none';
 }
+
 
 // ── EXCEL IMPORT DATA ────────────────────────────────────
 (function() {
@@ -1033,7 +1034,7 @@ function showToast(msg) {
   setTimeout(()=>t.classList.remove('show'),2200);
 }
 
-// ── CALENDAR (ORIGINALE GANZJAHRESANSICHT) ───────────────
+// ── CALENDAR ─────────────────────────────────────────────
 function renderCalendar() {
   const container = document.getElementById('calendar-grid'); container.innerHTML='';
   for(let m=0;m<12;m++) {
