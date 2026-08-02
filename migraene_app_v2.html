@@ -1,0 +1,1193 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Migräne Tagebuch</title>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #1a1f3a; --bg2: #242952; --bg3: #2e3560;
+    --text: #e8e4f0; --text-dim: #9b96b0;
+    --morning: #f0a500; --morning-soft: rgba(240,165,0,0.15);
+    --evening: #6b9bd2; --evening-soft: rgba(107,155,210,0.15);
+    --migraine: #e8a0a0; --migraine-soft: rgba(232,160,160,0.15);
+    --green: #7bc67e; --green-soft: rgba(123,198,126,0.15);
+    --red: #e05555; --red-soft: rgba(224,85,85,0.15);
+    --border: rgba(255,255,255,0.08); --radius: 14px; --radius-sm: 8px;
+  }
+  body { background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; font-size:16px; min-height:100vh; padding-bottom:100px; }
+
+  /* HEADER */
+  .header { background:var(--bg2); border-bottom:1px solid var(--border); padding:16px 20px 12px; position:sticky; top:0; z-index:100; }
+  .header-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+  .app-title { font-size:18px; font-weight:700; letter-spacing:-0.3px; }
+  .date-nav { display:flex; align-items:center; gap:10px; justify-content:center; margin-bottom:12px; }
+  .date-nav button { background:var(--bg3); border:1px solid var(--border); color:var(--text); width:32px; height:32px; border-radius:50%; cursor:pointer; font-size:16px; display:flex; align-items:center; justify-content:center; }
+  .date-label { font-size:14px; font-weight:600; color:var(--text-dim); min-width:130px; text-align:center; }
+  .today-btn { background:var(--bg3); border:1px solid var(--border); color:var(--text-dim); font-size:11px; padding:4px 10px; border-radius:20px; cursor:pointer; text-transform:uppercase; letter-spacing:0.5px; }
+  .tabs { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; }
+  .tab-btn { background:var(--bg3); border:2px solid transparent; color:var(--text-dim); padding:10px 4px; border-radius:var(--radius-sm); cursor:pointer; font-size:13px; font-weight:600; display:flex; flex-direction:column; align-items:center; gap:4px; transition:all 0.18s; }
+  .tab-btn .tab-icon { font-size:20px; }
+  .tab-btn.active-morning { border-color:var(--morning); color:var(--morning); background:var(--morning-soft); }
+  .tab-btn.active-evening { border-color:var(--evening); color:var(--evening); background:var(--evening-soft); }
+  .tab-btn.active-calendar { border-color:var(--migraine); color:var(--migraine); background:var(--migraine-soft); }
+
+  /* VIEWS */
+  .view { display:none; padding:20px; }
+  .view.active { display:block; }
+
+  /* SECTION */
+  .section { background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); padding:18px; margin-bottom:14px; }
+  .section-title { font-size:11px; font-weight:700; letter-spacing:1.2px; text-transform:uppercase; color:var(--text-dim); margin-bottom:16px; }
+  .section-title.mc { color:var(--morning); }
+  .section-title.ec { color:var(--evening); }
+
+  /* FIELD */
+  .field { margin-bottom:16px; }
+  .field:last-child { margin-bottom:0; }
+  .field-label { font-size:13px; font-weight:600; color:var(--text-dim); margin-bottom:8px; display:block; }
+  .field-sublabel { font-size:11px; color:var(--text-dim); margin-top:-4px; margin-bottom:8px; font-style:italic; }
+
+  /* SEGMENT CONTROL (replaces pills for short scales) */
+  .segment { display:grid; gap:6px; }
+  .segment.s2 { grid-template-columns:1fr 1fr; }
+  .segment.s3 { grid-template-columns:1fr 1fr 1fr; }
+  .segment.s4 { grid-template-columns:1fr 1fr 1fr 1fr; }
+  .segment.s5 { grid-template-columns:1fr 1fr 1fr 1fr 1fr; }
+  .seg-btn { background:var(--bg3); border:1.5px solid var(--border); color:var(--text-dim); padding:10px 4px; border-radius:var(--radius-sm); cursor:pointer; font-size:13px; font-weight:600; text-align:center; transition:all 0.15s; line-height:1.3; }
+  .seg-btn:hover { border-color:rgba(255,255,255,0.2); color:var(--text); }
+  .seg-btn.sel-m { background:var(--morning-soft); border-color:var(--morning); color:var(--morning); }
+  .seg-btn.sel-e { background:var(--evening-soft); border-color:var(--evening); color:var(--evening); }
+  .seg-btn.sel-g { background:var(--green-soft); border-color:var(--green); color:var(--green); }
+  .seg-btn.sel-r { background:var(--red-soft); border-color:var(--red); color:var(--red); }
+
+  /* PILLS (for numeric scales 0-4) */
+  .pills { display:flex; flex-wrap:wrap; gap:8px; }
+  .pill { background:var(--bg3); border:1.5px solid var(--border); color:var(--text-dim); padding:9px 16px; border-radius:30px; cursor:pointer; font-size:15px; font-weight:600; transition:all 0.15s; }
+  .pill.sel-m { background:var(--morning-soft); border-color:var(--morning); color:var(--morning); }
+  .pill.sel-e { background:var(--evening-soft); border-color:var(--evening); color:var(--evening); }
+
+  /* SLEEP TIME INPUTS */
+  .sleep-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px; }
+  .sleep-time-block { display:flex; flex-direction:column; gap:6px; }
+  .sleep-time-block label { font-size:12px; font-weight:600; color:var(--text-dim); }
+  .sleep-time-input { background:var(--bg3); border:1.5px solid var(--border); color:var(--text); padding:12px 10px; border-radius:var(--radius-sm); font-size:20px; font-weight:700; text-align:center; width:100%; font-family:inherit; }
+  .sleep-time-input:focus { outline:none; border-color:var(--morning); }
+  .sleep-duration-display { background:var(--morning-soft); border:1px solid var(--morning); border-radius:var(--radius-sm); padding:10px 14px; text-align:center; font-size:15px; color:var(--morning); font-weight:700; margin-top:4px; display:none; }
+
+  /* MED TOGGLES */
+  .med-item { display:flex; align-items:center; justify-content:space-between; padding:12px 0; border-bottom:1px solid var(--border); }
+  .med-item:last-child { border-bottom:none; padding-bottom:0; }
+  .med-name { font-size:15px; font-weight:500; }
+  .med-right { display:flex; align-items:center; gap:10px; }
+  .med-dose-input { background:var(--bg3); border:1px solid var(--border); color:var(--text); padding:6px 10px; border-radius:var(--radius-sm); font-size:14px; width:100px; text-align:center; }
+  .med-dose-input:focus { outline:none; border-color:var(--morning); }
+  .med-toggle { width:50px; height:28px; background:var(--bg3); border:1.5px solid var(--border); border-radius:30px; cursor:pointer; position:relative; transition:all 0.2s; flex-shrink:0; }
+  .med-toggle::after { content:''; position:absolute; top:3px; left:3px; width:18px; height:18px; background:var(--text-dim); border-radius:50%; transition:all 0.2s; }
+  .med-toggle.on { background:var(--green-soft); border-color:var(--green); }
+  .med-toggle.on::after { left:25px; background:var(--green); }
+
+  /* ACUTE MEDS */
+  .acute-med { display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid var(--border); }
+  .acute-med:last-child { border-bottom:none; }
+  .acute-checkbox { width:28px; height:28px; background:var(--bg3); border:1.5px solid var(--border); border-radius:6px; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:16px; flex-shrink:0; transition:all 0.15s; }
+  .acute-checkbox.checked { background:var(--evening-soft); border-color:var(--evening); }
+  .acute-med-name { font-size:15px; flex:1; }
+  .acute-dose { background:var(--bg3); border:1px solid var(--border); color:var(--text); padding:6px 10px; border-radius:var(--radius-sm); font-size:14px; width:110px; text-align:center; }
+  .acute-dose:focus { outline:none; border-color:var(--evening); }
+
+  /* BLOOD PRESSURE */
+  .bp-entry { background:var(--bg3); border-radius:var(--radius-sm); padding:10px 14px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; font-size:14px; }
+  .bp-val { font-weight:700; font-size:16px; }
+  .bp-val.high { color:var(--red); }
+  .bp-time { color:var(--text-dim); font-size:12px; }
+  .bp-empty { color:var(--text-dim); font-size:13px; font-style:italic; text-align:center; padding:12px 0; }
+
+  /* TEXT INPUT */
+  .text-input { width:100%; background:var(--bg3); border:1px solid var(--border); color:var(--text); padding:12px 14px; border-radius:var(--radius-sm); font-size:15px; resize:none; font-family:inherit; }
+  .text-input:focus { outline:none; border-color:var(--evening); }
+
+  /* SAVE BTN */
+  .save-btn { width:100%; padding:16px; border-radius:var(--radius); border:none; font-size:16px; font-weight:700; cursor:pointer; margin-top:8px; transition:opacity 0.15s; }
+  .save-btn:active { opacity:0.85; }
+  .save-morning { background:var(--morning); color:#1a1f3a; }
+  .save-evening { background:var(--evening); color:#1a1f3a; }
+
+  /* TOAST */
+  .toast { position:fixed; bottom:110px; left:50%; transform:translateX(-50%); background:var(--green); color:#1a1f3a; padding:12px 24px; border-radius:30px; font-weight:700; font-size:14px; opacity:0; transition:opacity 0.3s; pointer-events:none; z-index:999; white-space:nowrap; }
+  .toast.show { opacity:1; }
+
+  /* MIGRAINE BANNER */
+  .migraine-banner { background:var(--migraine-soft); border:1px solid var(--migraine); border-radius:var(--radius-sm); padding:10px 14px; font-size:13px; color:var(--migraine); font-weight:600; margin-bottom:14px; text-align:center; }
+
+  /* CALENDAR */
+  .cal-year-title { font-size:20px; font-weight:700; text-align:center; margin-bottom:20px; color:var(--migraine); }
+  .cal-legend { background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); padding:14px 18px; margin-bottom:16px; display:flex; flex-wrap:wrap; gap:10px 16px; }
+  .legend-item { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-dim); }
+  .legend-dot { width:12px; height:12px; border-radius:3px; flex-shrink:0; }
+  .cal-month { background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); padding:16px; margin-bottom:14px; }
+  .cal-month-title { font-size:14px; font-weight:700; margin-bottom:12px; color:var(--migraine); letter-spacing:0.5px; }
+  .cal-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:4px; }
+  .cal-weekday { text-align:center; font-size:10px; font-weight:700; color:var(--text-dim); padding:4px 0; letter-spacing:0.5px; }
+  .cal-day { aspect-ratio:1; border-radius:8px; display:flex; flex-direction:column; align-items:center; justify-content:center; font-size:12px; font-weight:500; cursor:pointer; background:var(--bg3); border:1.5px solid transparent; transition:all 0.15s; min-height:38px; position:relative; }
+  .cal-day:hover { border-color:rgba(255,255,255,0.15); }
+  .cal-day.empty { background:transparent; cursor:default; }
+  .cal-day.today { border-color:var(--text-dim) !important; }
+  /* Calendar markers */
+  .cal-day.migraine { background:#c0392b; }
+  .cal-day.strong-dizziness { border-color:#e8a0a0 !important; border-width:2px !important; }
+  .cal-day.bad-sleep { outline:2px solid var(--evening); outline-offset:1px; }
+  .cal-day.high-bp { background:rgba(224,85,85,0.25); }
+  .day-num { font-size:11px; line-height:1; }
+  .day-badges { display:flex; gap:1px; flex-wrap:wrap; justify-content:center; margin-top:2px; }
+  .badge { font-size:7px; font-weight:800; color:rgba(255,255,255,0.85); line-height:1; }
+  .no-adhs-dot { position:absolute; top:3px; right:4px; width:5px; height:5px; background:var(--red); border-radius:50%; }
+
+  /* MODAL */
+  .modal-overlay { display:none; position:fixed; inset:0; background:rgba(10,12,30,0.85); z-index:200; align-items:flex-end; justify-content:center; }
+  .modal-overlay.open { display:flex; }
+  .modal { background:var(--bg2); border-radius:var(--radius) var(--radius) 0 0; width:100%; max-width:500px; max-height:82vh; overflow-y:auto; padding:24px 20px; border-top:1px solid var(--border); }
+  .modal-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; }
+  .modal-title { font-size:16px; font-weight:700; }
+  .modal-close { background:var(--bg3); border:none; color:var(--text-dim); width:32px; height:32px; border-radius:50%; cursor:pointer; font-size:18px; display:flex; align-items:center; justify-content:center; }
+  .modal-section { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--text-dim); margin:14px 0 8px; }
+  .modal-row { display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--border); font-size:14px; }
+  .modal-row:last-child { border-bottom:none; }
+  .modal-row-label { color:var(--text-dim); }
+  .modal-row-value { font-weight:600; text-align:right; max-width:60%; }
+
+  /* GOOGLE DRIVE STATUS */
+  .sync-bar { display:flex; align-items:center; justify-content:space-between; padding:8px 12px; background:var(--bg3); border-radius:var(--radius-sm); margin-bottom:14px; font-size:12px; }
+  .sync-status { display:flex; align-items:center; gap:6px; color:var(--text-dim); }
+  .sync-dot { width:8px; height:8px; border-radius:50%; background:var(--text-dim); flex-shrink:0; }
+  .sync-dot.ok { background:var(--green); }
+  .sync-dot.syncing { background:var(--morning); animation:pulse 1s infinite; }
+  .sync-dot.error { background:var(--red); }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+  .sync-btn { background:none; border:1px solid var(--border); color:var(--text-dim); padding:4px 10px; border-radius:20px; cursor:pointer; font-size:11px; }
+  .sync-btn:hover { border-color:var(--evening); color:var(--evening); }
+
+  /* SUNDAY EXPORT BANNER */
+  .sunday-banner { background:linear-gradient(135deg,var(--morning-soft),rgba(240,165,0,0.25)); border:1.5px solid var(--morning); border-radius:var(--radius); padding:16px 18px; margin-bottom:16px; display:none; }
+  .sunday-banner-title { font-size:14px; font-weight:700; color:var(--morning); margin-bottom:4px; }
+  .sunday-banner-sub { font-size:12px; color:var(--text-dim); margin-bottom:12px; }
+  .sunday-export-btn { width:100%; padding:12px; border-radius:var(--radius-sm); border:none; background:var(--morning); color:#1a1f3a; font-size:14px; font-weight:700; cursor:pointer; }
+
+  @media (max-width:400px) {
+    .cal-day { min-height:32px; font-size:10px; }
+    .badge { font-size:6px; }
+    .seg-btn { font-size:11px; padding:9px 2px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-top">
+    <div class="app-title">Migräne Tagebuch</div>
+    <button class="today-btn" onclick="goToday()">Heute</button>
+  </div>
+  <!-- Sync Status Bar -->
+  <div class="sync-bar">
+    <div class="sync-status">
+      <div class="sync-dot" id="sync-dot"></div>
+      <span id="sync-label">Nur lokal gespeichert</span>
+    </div>
+    <button class="sync-btn" onclick="connectDrive()" id="sync-connect-btn">☁️ Mit Drive verbinden</button>
+  </div>
+  <div class="date-nav">
+    <button onclick="changeDay(-1)">‹</button>
+    <div class="date-label" id="dateLabel"></div>
+    <button onclick="changeDay(1)">›</button>
+  </div>
+  <div class="tabs">
+    <button class="tab-btn" id="tab-morning" onclick="switchTab('morning')"><span class="tab-icon">☀️</span>Morgen</button>
+    <button class="tab-btn" id="tab-evening" onclick="switchTab('evening')"><span class="tab-icon">🌙</span>Abend</button>
+    <button class="tab-btn" id="tab-calendar" onclick="switchTab('calendar')"><span class="tab-icon">📅</span>Kalender</button>
+  </div>
+</div>
+
+<!-- ===== MORGEN ===== -->
+<div class="view" id="view-morning">
+
+  <div class="section">
+    <div class="section-title mc">Schlaf</div>
+    <div class="field">
+      <div class="sleep-row">
+        <div class="sleep-time-block">
+          <label>🌙 Bettzeit</label>
+          <input type="time" class="sleep-time-input" id="bedtime" onchange="calcSleepDuration()">
+        </div>
+        <div class="sleep-time-block">
+          <label>☀️ Aufwachzeit</label>
+          <input type="time" class="sleep-time-input" id="waketime" onchange="calcSleepDuration()">
+        </div>
+      </div>
+      <div class="sleep-duration-display" id="sleep-duration-display"></div>
+    </div>
+    <div class="field">
+      <label class="field-label">Schlafqualität</label>
+      <div class="segment s3" id="seg-sleepQuality">
+        <button class="seg-btn" data-f="sleepQuality" data-v="Gut" onclick="pickSeg(this,'m')">😴 Gut</button>
+        <button class="seg-btn" data-f="sleepQuality" data-v="Mittel" onclick="pickSeg(this,'m')">😐 Mittel</button>
+        <button class="seg-btn" data-f="sleepQuality" data-v="Schlecht" onclick="pickSeg(this,'m')">😫 Schlecht</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title mc">Energie & Wohlbefinden</div>
+    <div class="field">
+      <label class="field-label">Energy Level</label>
+      <div class="segment s5" id="seg-energyMorning">
+        <button class="seg-btn" data-f="energyMorning" data-v="0" onclick="pickSeg(this,'m')">0<br><span style="font-size:9px">leer</span></button>
+        <button class="seg-btn" data-f="energyMorning" data-v="1" onclick="pickSeg(this,'m')">1<br><span style="font-size:9px">wenig</span></button>
+        <button class="seg-btn" data-f="energyMorning" data-v="2" onclick="pickSeg(this,'m')">2<br><span style="font-size:9px">ok</span></button>
+        <button class="seg-btn" data-f="energyMorning" data-v="3" onclick="pickSeg(this,'m')">3<br><span style="font-size:9px">gut</span></button>
+        <button class="seg-btn" data-f="energyMorning" data-v="4" onclick="pickSeg(this,'m')">4<br><span style="font-size:9px">top</span></button>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title mc">Alltag</div>
+    <div class="field">
+      <label class="field-label">Frühstück verpasst</label>
+      <div class="segment s2">
+        <button class="seg-btn" data-f="breakfastMissed" data-v="Ja" onclick="pickSeg(this,'m')">Ja</button>
+        <button class="seg-btn" data-f="breakfastMissed" data-v="Nein" onclick="pickSeg(this,'m')">Nein</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title mc">Regelmässige Medikamente</div>
+    <p style="font-size:12px;color:var(--text-dim);margin-bottom:14px;">Alle standardmässig als genommen — deaktivieren wenn nicht genommen.</p>
+    <div class="med-item">
+      <div>
+        <div class="med-name">Elvanse</div>
+        <div style="font-size:12px;color:var(--text-dim);margin-top:2px;">Dosis</div>
+      </div>
+      <div class="med-right">
+        <input class="med-dose-input" id="elvanse-dose" placeholder="z.B. 30mg">
+        <div class="med-toggle on" id="med-elvanse" onclick="toggleMed(this)"></div>
+      </div>
+    </div>
+    <div class="med-item">
+      <div class="med-name">Betmiga</div>
+      <div class="med-right"><div class="med-toggle on" id="med-betmiga" onclick="toggleMed(this)"></div></div>
+    </div>
+    <div class="med-item">
+      <div class="med-name">Toviaz</div>
+      <div class="med-right"><div class="med-toggle on" id="med-toviaz" onclick="toggleMed(this)"></div></div>
+    </div>
+    <div class="med-item">
+      <div class="med-name">Carvedilol</div>
+      <div class="med-right"><div class="med-toggle on" id="med-carvedilol" onclick="toggleMed(this)"></div></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title mc">Blutdruck</div>
+    <div id="bp-morning-list"><div class="bp-empty">Keine Messungen für diesen Tag.</div></div>
+  </div>
+
+  <button class="save-btn save-morning" onclick="saveMorning()">☀️ Morgen-Eintrag speichern</button>
+</div>
+
+<!-- ===== ABEND ===== -->
+<div class="view" id="view-evening">
+
+  <div id="migraine-banner" class="migraine-banner" style="display:none;">🌀 Migräne-Tag — heute im Kalender markiert</div>
+
+  <div class="section">
+    <div class="section-title ec">Migräne</div>
+    <div class="field">
+      <label class="field-label">Migräne-Tag?</label>
+      <div class="segment s2">
+        <button class="seg-btn" data-f="migraineDay" data-v="Ja" onclick="pickSeg(this,'e');updateBanner()">Ja 🌀</button>
+        <button class="seg-btn" data-f="migraineDay" data-v="Nein" onclick="pickSeg(this,'e');updateBanner()">Nein</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title ec">Symptome (0 = keine, 4 = stark)</div>
+
+    <div class="field">
+      <label class="field-label">Schwindel-Stärke</label>
+      <div class="segment s5" id="seg-dizziness">
+        <button class="seg-btn" data-f="dizziness" data-v="0" onclick="pickSeg(this,'e')">0</button>
+        <button class="seg-btn" data-f="dizziness" data-v="1" onclick="pickSeg(this,'e')">1</button>
+        <button class="seg-btn" data-f="dizziness" data-v="2" onclick="pickSeg(this,'e')">2</button>
+        <button class="seg-btn" data-f="dizziness" data-v="3" onclick="pickSeg(this,'e')">3</button>
+        <button class="seg-btn" data-f="dizziness" data-v="4" onclick="pickSeg(this,'e')">4</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label class="field-label">Kopfschmerzen</label>
+      <div class="segment s5" id="seg-headache">
+        <button class="seg-btn" data-f="headache" data-v="0" onclick="pickSeg(this,'e')" title="Keine">0<br><span style="font-size:8px">keine</span></button>
+        <button class="seg-btn" data-f="headache" data-v="1" onclick="pickSeg(this,'e')" title="Mittel">1<br><span style="font-size:8px">mittel</span></button>
+        <button class="seg-btn" data-f="headache" data-v="2" onclick="pickSeg(this,'e')" title="Stark Spannung">2<br><span style="font-size:8px">Span.</span></button>
+        <button class="seg-btn" data-f="headache" data-v="3" onclick="pickSeg(this,'e')" title="Stark Migräne">3<br><span style="font-size:8px">Migr.</span></button>
+        <button class="seg-btn" data-f="headache" data-v="4" onclick="pickSeg(this,'e')" title="Extrem">4<br><span style="font-size:8px">extrem</span></button>
+      </div>
+      <div class="field-sublabel">1=mittel · 2=stark Spannung · 3=stark Migräne · 4=extrem</div>
+    </div>
+
+    <div class="field">
+      <label class="field-label">POTS-Zittrigkeit</label>
+      <div class="segment s5" id="seg-pots">
+        <button class="seg-btn" data-f="pots" data-v="0" onclick="pickSeg(this,'e')">0</button>
+        <button class="seg-btn" data-f="pots" data-v="1" onclick="pickSeg(this,'e')">1</button>
+        <button class="seg-btn" data-f="pots" data-v="2" onclick="pickSeg(this,'e')">2</button>
+        <button class="seg-btn" data-f="pots" data-v="3" onclick="pickSeg(this,'e')">3</button>
+        <button class="seg-btn" data-f="pots" data-v="4" onclick="pickSeg(this,'e')">4</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label class="field-label">Reizempfindlichkeit</label>
+      <div class="segment s5" id="seg-sensitivity">
+        <button class="seg-btn" data-f="sensitivity" data-v="0" onclick="pickSeg(this,'e')">0</button>
+        <button class="seg-btn" data-f="sensitivity" data-v="1" onclick="pickSeg(this,'e')">1</button>
+        <button class="seg-btn" data-f="sensitivity" data-v="2" onclick="pickSeg(this,'e')">2</button>
+        <button class="seg-btn" data-f="sensitivity" data-v="3" onclick="pickSeg(this,'e')">3</button>
+        <button class="seg-btn" data-f="sensitivity" data-v="4" onclick="pickSeg(this,'e')">4</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label class="field-label">Brain Fog / Fatigue</label>
+      <div class="segment s5" id="seg-brainFog">
+        <button class="seg-btn" data-f="brainFog" data-v="0" onclick="pickSeg(this,'e')">0</button>
+        <button class="seg-btn" data-f="brainFog" data-v="1" onclick="pickSeg(this,'e')">1</button>
+        <button class="seg-btn" data-f="brainFog" data-v="2" onclick="pickSeg(this,'e')">2</button>
+        <button class="seg-btn" data-f="brainFog" data-v="3" onclick="pickSeg(this,'e')">3</button>
+        <button class="seg-btn" data-f="brainFog" data-v="4" onclick="pickSeg(this,'e')">4</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label class="field-label">Intensität des Tages</label>
+      <div class="segment s5" id="seg-dayIntensity">
+        <button class="seg-btn" data-f="dayIntensity" data-v="0" onclick="pickSeg(this,'e')">0</button>
+        <button class="seg-btn" data-f="dayIntensity" data-v="1" onclick="pickSeg(this,'e')">1</button>
+        <button class="seg-btn" data-f="dayIntensity" data-v="2" onclick="pickSeg(this,'e')">2</button>
+        <button class="seg-btn" data-f="dayIntensity" data-v="3" onclick="pickSeg(this,'e')">3</button>
+        <button class="seg-btn" data-f="dayIntensity" data-v="4" onclick="pickSeg(this,'e')">4</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label class="field-label">Stimmung</label>
+      <div class="segment s5" id="seg-mood">
+        <button class="seg-btn" data-f="mood" data-v="0" onclick="pickSeg(this,'e')">0</button>
+        <button class="seg-btn" data-f="mood" data-v="1" onclick="pickSeg(this,'e')">1</button>
+        <button class="seg-btn" data-f="mood" data-v="2" onclick="pickSeg(this,'e')">2</button>
+        <button class="seg-btn" data-f="mood" data-v="3" onclick="pickSeg(this,'e')">3</button>
+        <button class="seg-btn" data-f="mood" data-v="4" onclick="pickSeg(this,'e')">4</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label class="field-label">Energy Level</label>
+      <div class="segment s5" id="seg-energyEvening">
+        <button class="seg-btn" data-f="energyEvening" data-v="0" onclick="pickSeg(this,'e')">0<br><span style="font-size:9px">leer</span></button>
+        <button class="seg-btn" data-f="energyEvening" data-v="1" onclick="pickSeg(this,'e')">1<br><span style="font-size:9px">wenig</span></button>
+        <button class="seg-btn" data-f="energyEvening" data-v="2" onclick="pickSeg(this,'e')">2<br><span style="font-size:9px">ok</span></button>
+        <button class="seg-btn" data-f="energyEvening" data-v="3" onclick="pickSeg(this,'e')">3<br><span style="font-size:9px">gut</span></button>
+        <button class="seg-btn" data-f="energyEvening" data-v="4" onclick="pickSeg(this,'e')">4<br><span style="font-size:9px">top</span></button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label class="field-label">Anzahl Pinkeln</label>
+      <div style="display:flex;align-items:center;gap:16px;">
+        <button onclick="changeUrination(-1)" style="width:48px;height:48px;border-radius:50%;background:var(--bg3);border:1.5px solid var(--border);color:var(--text);font-size:24px;cursor:pointer;display:flex;align-items:center;justify-content:center;">−</button>
+        <div style="flex:1;text-align:center;">
+          <div id="urination-count" style="font-size:36px;font-weight:700;color:var(--evening);">0</div>
+          <div style="font-size:11px;color:var(--text-dim);margin-top:2px;">mal heute</div>
+        </div>
+        <button onclick="changeUrination(1)" style="width:48px;height:48px;border-radius:50%;background:var(--evening-soft);border:1.5px solid var(--evening);color:var(--evening);font-size:24px;cursor:pointer;display:flex;align-items:center;justify-content:center;">+</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title ec">Alltag</div>
+
+    <div class="field">
+      <label class="field-label">Bewegung</label>
+      <div class="segment s4" id="seg-movement">
+        <button class="seg-btn" data-f="movement" data-v="Nichts" onclick="pickSeg(this,'e')">🛋️<br>Nichts</button>
+        <button class="seg-btn" data-f="movement" data-v="Leicht" onclick="pickSeg(this,'e')">🚶<br>Leicht</button>
+        <button class="seg-btn" data-f="movement" data-v="Mittel" onclick="pickSeg(this,'e')">🚴<br>Mittel</button>
+        <button class="seg-btn" data-f="movement" data-v="Intensiv" onclick="pickSeg(this,'e')">🏃<br>Intensiv</button>
+      </div>
+    </div>
+
+    <div class="field" id="movement-good-field" style="display:none;">
+      <label class="field-label">Hat Bewegung gut getan?</label>
+      <div class="segment s2">
+        <button class="seg-btn" data-f="movementGood" data-v="Ja" onclick="pickSeg(this,'g');toggleMovementNote()">👍 Ja</button>
+        <button class="seg-btn" data-f="movementGood" data-v="Nein" onclick="pickSeg(this,'r');toggleMovementNote()">👎 Nein</button>
+      </div>
+    </div>
+    <div class="field" id="movement-note-field" style="display:none;">
+      <label class="field-label">Was war nicht gut?</label>
+      <textarea class="text-input" id="movement-note" rows="2" placeholder="z.B. zu anstrengend, danach Schwindel..."></textarea>
+    </div>
+
+    <div class="field">
+      <label class="field-label">Bildschirmzeit</label>
+      <div class="segment s3">
+        <button class="seg-btn" data-f="screentime" data-v="Wenig" onclick="pickSeg(this,'e')">📱 Wenig</button>
+        <button class="seg-btn" data-f="screentime" data-v="Mittel" onclick="pickSeg(this,'e')">📱📱 Mittel</button>
+        <button class="seg-btn" data-f="screentime" data-v="Viel" onclick="pickSeg(this,'e')">📱📱📱 Viel</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label class="field-label">Kaffee (Tassen)</label>
+      <div class="segment s5">
+        <button class="seg-btn" data-f="coffee" data-v="0" onclick="pickSeg(this,'e')">0</button>
+        <button class="seg-btn" data-f="coffee" data-v="1" onclick="pickSeg(this,'e')">1</button>
+        <button class="seg-btn" data-f="coffee" data-v="2" onclick="pickSeg(this,'e')">2</button>
+        <button class="seg-btn" data-f="coffee" data-v="3" onclick="pickSeg(this,'e')">3</button>
+        <button class="seg-btn" data-f="coffee" data-v="4" onclick="pickSeg(this,'e')">4</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label class="field-label">Recherche / Grübeln</label>
+      <div class="segment s2">
+        <button class="seg-btn" data-f="rumination" data-v="Ja" onclick="pickSeg(this,'e')">Ja</button>
+        <button class="seg-btn" data-f="rumination" data-v="Nein" onclick="pickSeg(this,'e')">Nein</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title ec">Akute Medikamente</div>
+    <p style="font-size:12px;color:var(--text-dim);margin-bottom:14px;">Anklicken was du heute genommen hast.</p>
+    <div class="acute-med">
+      <div class="acute-checkbox" id="acute-domperidon" onclick="toggleAcute(this)"></div>
+      <div class="acute-med-name">Domperidon</div>
+    </div>
+    <div class="acute-med">
+      <div class="acute-checkbox" id="acute-ibuprofen" onclick="toggleAcute(this)"></div>
+      <div class="acute-med-name">Ibuprofen</div>
+      <input class="acute-dose" id="ibuprofen-dose" placeholder="Dosis (mg)">
+    </div>
+    <div class="acute-med">
+      <div class="acute-checkbox" id="acute-triptan" onclick="toggleAcute(this)"></div>
+      <div class="acute-med-name">Triptan</div>
+      <div class="segment s2" style="width:100px;">
+        <button class="seg-btn" data-f="triptanDose" data-v="1" onclick="pickSeg(this,'e')" style="padding:6px;">1</button>
+        <button class="seg-btn" data-f="triptanDose" data-v="2" onclick="pickSeg(this,'e')" style="padding:6px;">2</button>
+      </div>
+    </div>
+    <div class="acute-med">
+      <div class="acute-checkbox" id="acute-duofer" onclick="toggleAcute(this)"></div>
+      <div class="acute-med-name">Duofer</div>
+    </div>
+    <div class="acute-med">
+      <div class="acute-checkbox" id="acute-magnesium" onclick="toggleAcute(this)"></div>
+      <div class="acute-med-name">Magnesiumglycinat</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title ec">Blutdruck</div>
+    <div id="bp-evening-list"><div class="bp-empty">Keine Messungen für diesen Tag.</div></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title ec">Notizen</div>
+    <div class="field">
+      <label class="field-label">Mögliche Auslöser</label>
+      <textarea class="text-input" id="triggers" rows="2" placeholder="z.B. Stress, Wetter, schlechter Schlaf..."></textarea>
+    </div>
+    <div class="field">
+      <label class="field-label">Notizen</label>
+      <textarea class="text-input" id="notes" rows="3" placeholder="Freie Notizen..."></textarea>
+    </div>
+  </div>
+
+  <button class="save-btn save-evening" onclick="saveEvening()">🌙 Abend-Eintrag speichern</button>
+</div>
+
+<!-- ===== KALENDER ===== -->
+<div class="view" id="view-calendar">
+  <!-- Sonntag-Abend Export Banner -->
+  <div class="sunday-banner" id="sunday-banner">
+    <div class="sunday-banner-title">📅 Wochenabschluss — CSV exportieren</div>
+    <div class="sunday-banner-sub">Es ist Sonntag Abend — guter Moment um die Woche zu sichern.</div>
+    <button class="sunday-export-btn" onclick="exportCSV()">⬇️ CSV jetzt exportieren</button>
+  </div>
+  <div class="cal-year-title">2026</div>
+  <div class="cal-legend">
+    <div class="legend-item"><div class="legend-dot" style="background:#c0392b;"></div>Migräne-Tag</div>
+    <div class="legend-item"><div class="legend-dot" style="background:transparent;border:2px solid var(--migraine);"></div>Starker Schwindel (3-4)</div>
+    <div class="legend-item"><div class="legend-dot" style="background:transparent;outline:2px solid var(--evening);"></div>Schlechter Schlaf</div>
+    <div class="legend-item"><div class="legend-dot" style="background:rgba(224,85,85,0.35);"></div>Hoher Blutdruck</div>
+    <div class="legend-item"><span style="font-size:10px;font-weight:800;color:var(--red);">•</span>&nbsp;ADHS-Med. nicht genommen</div>
+    <div class="legend-item"><span style="font-size:10px;font-weight:800;color:rgba(255,255,255,0.7);">!</span>&nbsp;Hohe Intensität (3-4)</div>
+  </div>
+  <div id="calendar-grid"></div>
+  <button style="width:100%;padding:14px;border-radius:var(--radius);border:1.5px solid var(--border);background:var(--bg3);color:var(--text-dim);font-size:14px;font-weight:600;cursor:pointer;margin-top:16px;" onclick="exportCSV()">⬇️ CSV exportieren (für Excel / Arzt)</button>
+</div>
+
+<!-- MODAL -->
+<div class="modal-overlay" id="modal-overlay" onclick="closeModal(event)">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-date-title"></div>
+      <button class="modal-close" onclick="document.getElementById('modal-overlay').classList.remove('open')">✕</button>
+    </div>
+    <div id="modal-content"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── STATE ────────────────────────────────────────────────
+let currentDate = new Date(); currentDate.setHours(0,0,0,0);
+const WEEKDAYS = ['Mo','Di','Mi','Do','Fr','Sa','So'];
+const MONTHS = ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+
+function dateKey(d) { return d.toISOString().split('T')[0]; }
+
+// ── GOOGLE DRIVE SYNC ────────────────────────────────────
+const DRIVE_FILE_NAME = 'migraene_tagebuch_daten.json';
+const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.appdata';
+const CLIENT_ID = '799152036238-rgv5m6ng5ut359d52vepf34t4f1e3jud.apps.googleusercontent.com';
+let gisClient = null;
+let driveFileId = null;
+let memCache = {}; // In-memory cache für alle Daten
+let syncTimer = null;
+let syncState = 'local'; // 'local' | 'ok' | 'syncing' | 'error'
+
+// Fallback: localStorage wenn Drive nicht verbunden
+function loadLocal(key) { try { return JSON.parse(localStorage.getItem(key)||'null'); } catch(e) { return null; } }
+function saveLocal(key, val) { localStorage.setItem(key, JSON.stringify(val)); }
+
+function load(key) {
+  if (memCache[key] !== undefined) return memCache[key] || {};
+  const local = loadLocal(key);
+  return local || {};
+}
+
+function save(key, val) {
+  memCache[key] = val;
+  saveLocal(key, val); // Sofort lokal speichern
+  scheduleDriveSync();
+}
+
+function setSyncStatus(state, msg) {
+  syncState = state;
+  const dot = document.getElementById('sync-dot');
+  const label = document.getElementById('sync-label');
+  if (!dot || !label) return;
+  dot.className = 'sync-dot ' + (state==='ok'?'ok':state==='syncing'?'syncing':state==='error'?'error':'');
+  label.textContent = msg;
+}
+
+function scheduleDriveSync() {
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(syncToDrive, 2000); // 2 Sekunden nach letztem Save
+}
+
+// ── GOOGLE SIGN IN ───────────────────────────────────────
+function initGoogleAuth() {
+  if (typeof google === 'undefined') {
+    setSyncStatus('local', 'Nur lokal gespeichert');
+    return;
+  }
+  google.accounts.id.initialize({
+    client_id: CLIENT_ID,
+    callback: () => {}
+  });
+  // Try silent sign-in via token client
+  const tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: CLIENT_ID,
+    scope: 'https://www.googleapis.com/auth/drive.appdata',
+    callback: async (resp) => {
+      if (resp.error) { setSyncStatus('error', 'Anmeldung fehlgeschlagen'); return; }
+      window._gToken = resp.access_token;
+      setSyncStatus('syncing', 'Verbinde mit Drive...');
+      await loadFromDrive();
+    }
+  });
+  gisClient = tokenClient;
+}
+
+function connectDrive() {
+  if (!gisClient) {
+    // Google script noch nicht geladen — nochmal versuchen
+    initGoogleAuth();
+    if (!gisClient) {
+      setSyncStatus('error', 'Google nicht verfügbar');
+      alert('Google konnte nicht geladen werden. Bitte stelle sicher dass du mit dem Internet verbunden bist.');
+      return;
+    }
+  }
+  gisClient.requestAccessToken({prompt: 'consent'});
+}
+
+// ── DRIVE: LOAD ──────────────────────────────────────────
+async function loadFromDrive() {
+  try {
+    setSyncStatus('syncing', 'Lade Daten...');
+    // Search for existing file in appDataFolder
+    const searchRes = await fetch(
+      'https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=name%3D%22'+DRIVE_FILE_NAME+'%22&fields=files(id,name)',
+      { headers: { Authorization: 'Bearer ' + window._gToken } }
+    );
+    const searchData = await searchRes.json();
+    if (searchData.files && searchData.files.length > 0) {
+      driveFileId = searchData.files[0].id;
+      const fileRes = await fetch(
+        'https://www.googleapis.com/drive/v3/files/' + driveFileId + '?alt=media',
+        { headers: { Authorization: 'Bearer ' + window._gToken } }
+      );
+      const driveData = await fileRes.json();
+      // Merge drive data into memCache (drive wins)
+      Object.assign(memCache, driveData);
+      // Also update localStorage
+      Object.entries(driveData).forEach(([k,v]) => saveLocal(k, v));
+      setSyncStatus('ok', 'Drive synchronisiert ✓');
+      const btn = document.getElementById('sync-connect-btn');
+      if (btn) btn.style.display = 'none';
+    } else {
+      setSyncStatus('ok', 'Drive verbunden (neu)');
+      const btn = document.getElementById('sync-connect-btn');
+      if (btn) btn.style.display = 'none';
+    }
+    // Refresh current view
+    if (currentTab !== 'calendar') loadDayData();
+    else renderCalendar();
+  } catch(e) {
+    setSyncStatus('error', 'Fehler beim Laden');
+    console.error(e);
+  }
+}
+
+// ── DRIVE: SAVE ──────────────────────────────────────────
+async function syncToDrive() {
+  if (!window._gToken) return; // Not connected, localStorage only
+  try {
+    setSyncStatus('syncing', 'Speichere...');
+    const content = JSON.stringify(memCache);
+    const metadata = { name: DRIVE_FILE_NAME, parents: ['appDataFolder'] };
+    let url, method;
+    if (driveFileId) {
+      url = 'https://www.googleapis.com/upload/drive/v3/files/' + driveFileId + '?uploadType=multipart';
+      method = 'PATCH';
+    } else {
+      url = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart';
+      method = 'POST';
+    }
+    const boundary = '-------migraene_boundary';
+    const body = `--${boundary}\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(metadata)}\r\n--${boundary}\r\nContent-Type: application/json\r\n\r\n${content}\r\n--${boundary}--`;
+    const res = await fetch(url, {
+      method,
+      headers: {
+        Authorization: 'Bearer ' + window._gToken,
+        'Content-Type': 'multipart/related; boundary=' + boundary
+      },
+      body
+    });
+    const result = await res.json();
+    if (result.id) driveFileId = result.id;
+    setSyncStatus('ok', 'Drive synchronisiert ✓');
+    const btn = document.getElementById('sync-connect-btn');
+    if (btn) btn.style.display = 'none';
+  } catch(e) {
+    setSyncStatus('error', 'Sync-Fehler — lokal gespeichert');
+    console.error(e);
+  }
+}
+
+function mKey(d) { return 'mor_'+dateKey(d); }
+function eKey(d) { return 'eve_'+dateKey(d); }
+function bpKey(d) { return 'bp_'+dateKey(d); }
+
+// ── SONNTAG-BANNER ───────────────────────────────────────
+function checkSundayBanner() {
+  const now = new Date();
+  const isSunday = now.getDay() === 0;
+  const isEvening = now.getHours() >= 18;
+  const banner = document.getElementById('sunday-banner');
+  if (banner) banner.style.display = (isSunday && isEvening) ? 'block' : 'none';
+}
+
+// ── INIT PILLS ───────────────────────────────────────────
+function makePills(id, vals, field, mode) {
+  const c = document.getElementById(id); if(!c) return; c.innerHTML='';
+  vals.forEach(v => {
+    const b = document.createElement('button');
+    b.className='pill'; b.textContent=v; b.dataset.f=field; b.dataset.v=v;
+    b.onclick = () => { c.querySelectorAll('.pill').forEach(p=>p.className='pill'); b.classList.add(mode==='m'?'sel-m':'sel-e'); };
+    c.appendChild(b);
+  });
+}
+function initPills() {
+  // urination now uses counter, no pills needed
+}
+
+let urinationCount = 0;
+function changeUrination(delta) {
+  urinationCount = Math.max(0, urinationCount + delta);
+  document.getElementById('urination-count').textContent = urinationCount;
+}
+function setUrination(val) {
+  urinationCount = parseInt(val)||0;
+  document.getElementById('urination-count').textContent = urinationCount;
+}
+
+function toggleMovementNote() {
+  const sel = document.querySelector('[data-f="movementGood"].sel-r');
+  document.getElementById('movement-note-field').style.display = sel ? 'block' : 'none';
+}
+
+function calcSleepDuration() {
+  const bed = document.getElementById('bedtime').value;
+  const wake = document.getElementById('waketime').value;
+  const disp = document.getElementById('sleep-duration-display');
+  if (!bed || !wake) { disp.style.display='none'; return; }
+  const [bh,bm] = bed.split(':').map(Number);
+  const [wh,wm] = wake.split(':').map(Number);
+  let bedMins = bh*60+bm;
+  let wakeMins = wh*60+wm;
+  // If wake is before bed, assume slept past midnight
+  if (wakeMins <= bedMins) wakeMins += 24*60;
+  const totalMins = wakeMins - bedMins;
+  const hours = Math.floor(totalMins/60);
+  const mins = totalMins%60;
+  disp.style.display='block';
+  disp.textContent = `⏱ Schlafdauer: ${hours}h${mins>0?' '+mins+'min':''}`;
+}
+
+// ── TABS ─────────────────────────────────────────────────
+let currentTab = 'morning';
+function switchTab(tab) {
+  currentTab = tab;
+  ['morning','evening','calendar'].forEach(t => {
+    document.getElementById('view-'+t).classList.toggle('active',t===tab);
+    const btn = document.getElementById('tab-'+t);
+    btn.className='tab-btn';
+    if(t===tab) btn.classList.add('active-'+t);
+  });
+  if(tab!=='calendar') loadDayData();
+  else renderCalendar();
+}
+
+// ── DATE NAV ─────────────────────────────────────────────
+function updateDateLabel() {
+  const wd=WEEKDAYS[(currentDate.getDay()+6)%7];
+  document.getElementById('dateLabel').textContent=`${wd}, ${currentDate.getDate()}. ${MONTHS[currentDate.getMonth()]} ${currentDate.getFullYear()}`;
+}
+function changeDay(d) { currentDate.setDate(currentDate.getDate()+d); updateDateLabel(); loadDayData(); }
+function goToday() { currentDate=new Date(); currentDate.setHours(0,0,0,0); updateDateLabel(); loadDayData(); }
+
+// ── SEGMENT PICKER ───────────────────────────────────────
+function pickSeg(btn, mode) {
+  const f = btn.dataset.f;
+  document.querySelectorAll(`[data-f="${f}"]`).forEach(b => b.classList.remove('sel-m','sel-e','sel-g','sel-r'));
+  const cls = mode==='m'?'sel-m':mode==='g'?'sel-g':mode==='r'?'sel-r':'sel-e';
+  btn.classList.add(cls);
+  if(f==='movement') {
+    document.getElementById('movement-good-field').style.display = btn.dataset.v==='Nichts' ? 'none' : 'block';
+  }
+}
+function getSegVal(f) {
+  const sel = document.querySelector(`[data-f="${f}"].sel-m,[data-f="${f}"].sel-e,[data-f="${f}"].sel-g,[data-f="${f}"].sel-r`);
+  return sel ? sel.dataset.v : null;
+}
+function setSegVal(f, v) {
+  document.querySelectorAll(`[data-f="${f}"]`).forEach(b => {
+    b.classList.remove('sel-m','sel-e','sel-g','sel-r');
+    if(b.dataset.v===String(v)) {
+      const morning_fields = ['sleepQuality','breakfastMissed','energyMorning'];
+      b.classList.add(morning_fields.includes(f)?'sel-m':'sel-e');
+    }
+  });
+}
+function getPillVal(id) {
+  const sel = document.querySelector(`#${id} .pill.sel-m, #${id} .pill.sel-e`);
+  return sel ? sel.dataset.v : null;
+}
+function setPillVal(id, v) {
+  document.querySelectorAll(`#${id} .pill`).forEach(p => {
+    p.className='pill';
+    if(p.dataset.v===String(v)) p.classList.add(id.includes('sleep')?'sel-m':'sel-e');
+  });
+}
+
+// ── TOGGLES ──────────────────────────────────────────────
+function toggleMed(el) { el.classList.toggle('on'); }
+function toggleAcute(el) { el.classList.toggle('checked'); el.textContent=el.classList.contains('checked')?'✓':''; }
+
+// ── BANNER ───────────────────────────────────────────────
+function updateBanner() {
+  const sel = document.querySelector('[data-f="migraineDay"].sel-e');
+  document.getElementById('migraine-banner').style.display = (sel&&sel.dataset.v==='Ja')?'block':'none';
+}
+
+// ── BLOOD PRESSURE DISPLAY ───────────────────────────────
+function renderBP(containerId) {
+  const c = document.getElementById(containerId); if(!c) return;
+  const measurements = load(bpKey(currentDate));
+  if(!measurements.list || measurements.list.length===0) {
+    c.innerHTML='<div class="bp-empty">Keine Messungen für diesen Tag.</div>'; return;
+  }
+  c.innerHTML = measurements.list.map(m => {
+    const highSys = parseInt(m.sys) > 135;
+    const highDia = parseInt(m.dia) > 100;
+    const isHigh = highSys || highDia;
+    return `<div class="bp-entry">
+      <div>
+        <div class="bp-val ${isHigh?'high':''}">${m.sys}/${m.dia} mmHg${isHigh?' ⚠️':''}</div>
+        ${m.pulse?`<div class="bp-time">Puls: ${m.pulse} bpm</div>`:''}
+      </div>
+      <div class="bp-time">${m.time||''}</div>
+    </div>`;
+  }).join('');
+}
+
+// ── LOAD DAY ─────────────────────────────────────────────
+function loadDayData() {
+  if(currentTab==='morning') loadMorning();
+  if(currentTab==='evening') loadEvening();
+}
+
+function loadMorning() {
+  const d = load(mKey(currentDate));
+  // Reset
+  document.querySelectorAll('[data-f]').forEach(b => {
+    if(['sleepQuality','breakfastMissed','energyMorning'].includes(b.dataset.f)) b.classList.remove('sel-m','sel-e','sel-g','sel-r');
+  });
+  document.getElementById('bedtime').value='';
+  document.getElementById('waketime').value='';
+  document.getElementById('sleep-duration-display').style.display='none';
+  ['elvanse','betmiga','toviaz','carvedilol'].forEach(m=>document.getElementById('med-'+m).className='med-toggle on');
+  document.getElementById('elvanse-dose').value='';
+
+  if(d.bedtime) { document.getElementById('bedtime').value=d.bedtime; }
+  if(d.waketime) { document.getElementById('waketime').value=d.waketime; }
+  if(d.bedtime && d.waketime) calcSleepDuration();
+  if(d.sleepQuality) setSegVal('sleepQuality', d.sleepQuality);
+  if(d.breakfastMissed) setSegVal('breakfastMissed', d.breakfastMissed);
+  if(d.energyMorning !== undefined) setSegVal('energyMorning', d.energyMorning);
+  if(d.elvanseDose) document.getElementById('elvanse-dose').value = d.elvanseDose;
+  if(d.meds) {
+    ['elvanse','betmiga','toviaz','carvedilol'].forEach(m => {
+      if(d.meds[m]===false) document.getElementById('med-'+m).classList.remove('on');
+    });
+  }
+  renderBP('bp-morning-list');
+}
+
+function loadEvening() {
+  const d = load(eKey(currentDate));
+  // Reset all evening segs
+  const eveFields = ['migraineDay','dizziness','headache','pots','sensitivity','brainFog','dayIntensity','mood','energyEvening','movement','movementGood','screentime','coffee','rumination','triptanDose'];
+  eveFields.forEach(f => document.querySelectorAll(`[data-f="${f}"]`).forEach(b=>b.classList.remove('sel-m','sel-e','sel-g','sel-r')));
+  // Reset urination counter
+  setUrination(0);
+  document.querySelectorAll('#pills-urination .pill').forEach(p=>p.className='pill');
+  ['domperidon','ibuprofen','triptan','duofer','magnesium'].forEach(m=>{const el=document.getElementById('acute-'+m);if(el){el.classList.remove('checked');el.textContent='';}});
+  document.getElementById('ibuprofen-dose').value='';
+  document.getElementById('movement-note').value='';
+  document.getElementById('movement-note-field').style.display='none';
+  document.getElementById('triggers').value='';
+  document.getElementById('notes').value='';
+  document.getElementById('migraine-banner').style.display='none';
+  document.getElementById('movement-good-field').style.display='none';
+
+  if(!d||!Object.keys(d).length) { renderBP('bp-evening-list'); return; }
+
+  ['migraineDay','dizziness','headache','pots','sensitivity','brainFog','dayIntensity','mood','energyEvening','movement','screentime','coffee','rumination','triptanDose'].forEach(f => {
+    if(d[f]!==undefined && d[f]!==null) setSegVal(f, d[f]);
+  });
+  if(d.movementGood) {
+    document.querySelectorAll(`[data-f="movementGood"]`).forEach(b=>{b.classList.remove('sel-g','sel-r'); if(b.dataset.v===d.movementGood) b.classList.add(d.movementGood==='Ja'?'sel-g':'sel-r');});
+  }
+  if(d.movement && d.movement!=='Nichts') document.getElementById('movement-good-field').style.display='block';
+  if(d.movementNote) {
+    document.getElementById('movement-note').value=d.movementNote;
+    document.getElementById('movement-note-field').style.display='block';
+  }
+  if(d.urination) setPillVal('pills-urination', d.urination);
+  if(d.acuteMeds) d.acuteMeds.forEach(m=>{const el=document.getElementById('acute-'+m);if(el){el.classList.add('checked');el.textContent='✓';}});
+  if(d.ibuprofenDose) document.getElementById('ibuprofen-dose').value=d.ibuprofenDose;
+  if(d.triggers) document.getElementById('triggers').value=d.triggers;
+  if(d.notes) document.getElementById('notes').value=d.notes;
+  updateBanner();
+  renderBP('bp-evening-list');
+}
+
+// ── SAVE ─────────────────────────────────────────────────
+function saveMorning() {
+  const bed = document.getElementById('bedtime').value;
+  const wake = document.getElementById('waketime').value;
+  let sleepDuration = null;
+  if (bed && wake) {
+    const [bh,bm]=bed.split(':').map(Number), [wh,wm]=wake.split(':').map(Number);
+    let bMins=bh*60+bm, wMins=wh*60+wm;
+    if(wMins<=bMins) wMins+=24*60;
+    sleepDuration = ((wMins-bMins)/60).toFixed(1);
+  }
+  const data = {
+    bedtime: bed,
+    waketime: wake,
+    sleepDuration,
+    sleepQuality: getSegVal('sleepQuality'),
+    breakfastMissed: getSegVal('breakfastMissed'),
+    energyMorning: getSegVal('energyMorning'),
+    elvanseDose: document.getElementById('elvanse-dose').value,
+    meds: {
+      elvanse: document.getElementById('med-elvanse').classList.contains('on'),
+      betmiga: document.getElementById('med-betmiga').classList.contains('on'),
+      toviaz: document.getElementById('med-toviaz').classList.contains('on'),
+      carvedilol: document.getElementById('med-carvedilol').classList.contains('on'),
+    },
+    savedAt: new Date().toISOString()
+  };
+  save(mKey(currentDate), data);
+  showToast('☀️ Morgen-Eintrag gespeichert!');
+}
+
+function saveEvening() {
+  const acuteMeds = [];
+  ['domperidon','ibuprofen','triptan','duofer','magnesium'].forEach(m=>{if(document.getElementById('acute-'+m).classList.contains('checked')) acuteMeds.push(m);});
+  const data = {
+    migraineDay: getSegVal('migraineDay'),
+    dizziness: getSegVal('dizziness'),
+    headache: getSegVal('headache'),
+    pots: getSegVal('pots'),
+    sensitivity: getSegVal('sensitivity'),
+    brainFog: getSegVal('brainFog'),
+    dayIntensity: getSegVal('dayIntensity'),
+    mood: getSegVal('mood'),
+    energyEvening: getSegVal('energyEvening'),
+    urination: urinationCount > 0 ? urinationCount : null,
+    movement: getSegVal('movement'),
+    movementGood: getSegVal('movementGood'),
+    movementNote: document.getElementById('movement-note').value,
+    screentime: getSegVal('screentime'),
+    coffee: getSegVal('coffee'),
+    rumination: getSegVal('rumination'),
+    triptanDose: getSegVal('triptanDose'),
+    acuteMeds,
+    ibuprofenDose: document.getElementById('ibuprofen-dose').value,
+    triggers: document.getElementById('triggers').value,
+    notes: document.getElementById('notes').value,
+    savedAt: new Date().toISOString()
+  };
+  save(eKey(currentDate), data);
+  showToast('🌙 Abend-Eintrag gespeichert!');
+}
+
+// ── TOAST ────────────────────────────────────────────────
+function showToast(msg) {
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),2200);
+}
+
+// ── CALENDAR ─────────────────────────────────────────────
+function renderCalendar() {
+  const container = document.getElementById('calendar-grid'); container.innerHTML='';
+  for(let m=0;m<12;m++) {
+    const monthEl=document.createElement('div'); monthEl.className='cal-month';
+    const title=document.createElement('div'); title.className='cal-month-title'; title.textContent=MONTHS[m]+' 2026'; monthEl.appendChild(title);
+    const grid=document.createElement('div'); grid.className='cal-grid';
+    WEEKDAYS.forEach(wd=>{const w=document.createElement('div');w.className='cal-weekday';w.textContent=wd;grid.appendChild(w);});
+    const startWd=(new Date(2026,m,1).getDay()+6)%7;
+    const daysInMonth=new Date(2026,m+1,0).getDate();
+    for(let i=0;i<startWd;i++){const e=document.createElement('div');e.className='cal-day empty';grid.appendChild(e);}
+    for(let d=1;d<=daysInMonth;d++) {
+      const date=new Date(2026,m,d);
+      const key=dateKey(date);
+      const mor=load('mor_'+key);
+      const eve=load('eve_'+key);
+      const bp=load('bp_'+key);
+      const dayEl=document.createElement('div'); dayEl.className='cal-day';
+      const today=new Date();today.setHours(0,0,0,0);
+      if(date.getTime()===today.getTime()) dayEl.classList.add('today');
+      // Migraine
+      if(eve.migraineDay==='Ja') dayEl.classList.add('migraine');
+      // Strong dizziness (3 or 4)
+      if(parseInt(eve.dizziness)>=3) dayEl.classList.add('strong-dizziness');
+      // Bad sleep
+      if(mor.sleepQuality==='Schlecht') dayEl.classList.add('bad-sleep');
+      // High BP
+      if(bp.list && bp.list.some(m=>parseInt(m.sys)>135||parseInt(m.dia)>100)) dayEl.classList.add('high-bp');
+      // ADHS not taken
+      const adhs_missed = mor.meds && mor.meds.elvanse===false;
+
+      const num=document.createElement('div'); num.className='day-num'; num.textContent=d; dayEl.appendChild(num);
+
+      const badges=[]; if(eve.dayIntensity&&parseInt(eve.dayIntensity)>=3) badges.push('!');
+      if(badges.length){
+        const br=document.createElement('div');br.className='day-badges';
+        badges.forEach(b=>{const s=document.createElement('span');s.className='badge';s.textContent=b;br.appendChild(s);});
+        dayEl.appendChild(br);
+      }
+      if(adhs_missed){const dot=document.createElement('div');dot.className='no-adhs-dot';dayEl.appendChild(dot);}
+
+      dayEl.onclick=()=>openModal(date,mor,eve,bp);
+      grid.appendChild(dayEl);
+    }
+    monthEl.appendChild(grid); container.appendChild(monthEl);
+  }
+}
+
+// ── MODAL ────────────────────────────────────────────────
+function openModal(date,mor,eve,bp) {
+  const wd=WEEKDAYS[(date.getDay()+6)%7];
+  document.getElementById('modal-date-title').textContent=`${wd}, ${date.getDate()}. ${MONTHS[date.getMonth()]} 2026`;
+  let html='';
+  if(Object.keys(mor).length) {
+    html+='<div class="modal-section">☀️ Morgen</div>';
+    if(mor.bedtime||mor.waketime) html+=row('Schlaf',`${mor.bedtime||'?'} → ${mor.waketime||'?'}${mor.sleepDuration?' ('+mor.sleepDuration+'h)':''}`);
+    if(mor.sleepQuality) html+=row('Schlafqualität',mor.sleepQuality);
+    if(mor.energyMorning!==undefined) html+=row('Energy Level (morgens)',mor.energyMorning+'/4');
+    if(mor.breakfastMissed) html+=row('Frühstück verpasst',mor.breakfastMissed);
+    if(mor.meds) {
+      const taken=Object.entries(mor.meds).filter(([k,v])=>v).map(([k])=>k==='elvanse'?'Elvanse'+(mor.elvanseDose?' ('+mor.elvanseDose+')':''):k.charAt(0).toUpperCase()+k.slice(1));
+      const missed=Object.entries(mor.meds).filter(([k,v])=>!v).map(([k])=>k.charAt(0).toUpperCase()+k.slice(1));
+      if(taken.length) html+=row('Regelmässige Medikamente',taken.join(', '));
+      if(missed.length) html+=row('Nicht genommen',missed.join(', '),'color:var(--red)');
+    }
+  }
+  if(Object.keys(eve).length) {
+    html+='<div class="modal-section">🌙 Abend</div>';
+    if(eve.migraineDay) html+=row('Migräne-Tag',eve.migraineDay);
+    if(eve.dizziness!==null&&eve.dizziness!==undefined) html+=row('Schwindel',eve.dizziness+'/4');
+    if(eve.headache!==null&&eve.headache!==undefined) html+=row('Kopfschmerzen',eve.headache+'/4');
+    if(eve.pots!==null&&eve.pots!==undefined) html+=row('POTS-Zittrigkeit',eve.pots+'/4');
+    if(eve.sensitivity!==null&&eve.sensitivity!==undefined) html+=row('Reizempfindlichkeit',eve.sensitivity+'/4');
+    if(eve.brainFog!==null&&eve.brainFog!==undefined) html+=row('Brain Fog/Fatigue',eve.brainFog+'/4');
+    if(eve.dayIntensity!==null&&eve.dayIntensity!==undefined) html+=row('Intensität des Tages',eve.dayIntensity+'/4');
+    if(eve.mood!==null&&eve.mood!==undefined) html+=row('Stimmung',eve.mood+'/4');
+    if(eve.energyEvening!==null&&eve.energyEvening!==undefined) html+=row('Energy Level (abends)',eve.energyEvening+'/4');
+    if(eve.urination) html+=row('Anzahl Pinkeln',eve.urination+'x');
+    if(eve.movement) html+=row('Bewegung',eve.movement+(eve.movementGood?' — gut getan: '+eve.movementGood:'')+(eve.movementNote?' ('+eve.movementNote+')':''));
+    if(eve.screentime) html+=row('Bildschirmzeit',eve.screentime);
+    if(eve.coffee) html+=row('Kaffee',eve.coffee+' Tassen');
+    if(eve.rumination) html+=row('Recherche/Grübeln',eve.rumination);
+    if(eve.acuteMeds&&eve.acuteMeds.length) {
+      const list=eve.acuteMeds.map(m=>{
+        if(m==='ibuprofen'&&eve.ibuprofenDose) return `Ibuprofen (${eve.ibuprofenDose}mg)`;
+        if(m==='triptan'&&eve.triptanDose) return `Triptan (${eve.triptanDose} Tbl.)`;
+        return m.charAt(0).toUpperCase()+m.slice(1);
+      });
+      html+=row('Akute Medikamente',list.join(', '));
+    }
+    if(eve.triggers) html+=row('Auslöser',eve.triggers);
+    if(eve.notes) html+=row('Notizen',eve.notes);
+  }
+  if(bp.list&&bp.list.length) {
+    html+='<div class="modal-section">💉 Blutdruck</div>';
+    bp.list.forEach(m=>{
+      const high=parseInt(m.sys)>135||parseInt(m.dia)>100;
+      html+=row(m.time||'—',`${m.sys}/${m.dia} mmHg${m.pulse?' · '+m.pulse+' bpm':''}${high?' ⚠️':''}`,high?'color:var(--red)':'');
+    });
+  }
+  if(!html) html='<p style="color:var(--text-dim);text-align:center;padding:20px 0;">Kein Eintrag für diesen Tag.</p>';
+  document.getElementById('modal-content').innerHTML=html;
+  document.getElementById('modal-overlay').classList.add('open');
+}
+function row(label,val,style='') { return `<div class="modal-row"><span class="modal-row-label">${label}</span><span class="modal-row-value" style="${style}">${val}</span></div>`; }
+function closeModal(e) { if(e.target===document.getElementById('modal-overlay')) document.getElementById('modal-overlay').classList.remove('open'); }
+
+// ── CSV EXPORT ───────────────────────────────────────────
+function exportCSV() {
+  const headers=['Datum','Wochentag','Bettzeit','Aufwachzeit','Schlafdauer (h)','Schlafqualität','Frühstück verpasst','Energy (morgens)',
+    'Elvanse','Elvanse Dosis','Betmiga','Toviaz','Carvedilol',
+    'Migräne-Tag','Schwindel','Kopfschmerzen','POTS-Zittrigkeit','Reizempfindlichkeit','Brain Fog/Fatigue','Intensität','Stimmung','Energy (abends)','Pinkeln',
+    'Bewegung','Bewegung gut getan','Bildschirmzeit','Kaffee','Recherche/Grübeln',
+    'Domperidon','Ibuprofen','Ibuprofen Dosis','Triptan','Triptan Dosis','Duofer','Magnesiumglycinat',
+    'BP Messungen','Auslöser','Notizen'];
+  const rows=[headers];
+  for(let m=0;m<12;m++) {
+    const daysInMonth=new Date(2026,m+1,0).getDate();
+    for(let d=1;d<=daysInMonth;d++) {
+      const date=new Date(2026,m,d); const key=dateKey(date);
+      const mor=load('mor_'+key); const eve=load('eve_'+key); const bp=load('bp_'+key);
+      if(!Object.keys(mor).length&&!Object.keys(eve).length&&!Object.keys(bp).length) continue;
+      const wd=WEEKDAYS[(date.getDay()+6)%7];
+      const bpStr=bp.list?bp.list.map(x=>`${x.time}:${x.sys}/${x.dia}`).join('; '):'';
+      rows.push([
+        key,wd,
+        mor.bedtime||'',mor.waketime||'',mor.sleepDuration||'',mor.sleepQuality||'',mor.breakfastMissed||'',mor.energyMorning??'',
+        mor.meds?.elvanse?'Ja':'Nein',mor.elvanseDose||'',
+        mor.meds?.betmiga?'Ja':'Nein',mor.meds?.toviaz?'Ja':'Nein',mor.meds?.carvedilol?'Ja':'Nein',
+        eve.migraineDay||'',eve.dizziness??'',eve.headache??'',eve.pots??'',eve.sensitivity??'',eve.brainFog??'',eve.dayIntensity??'',eve.mood??'',eve.energyEvening??'',eve.urination||'',
+        eve.movement||'',eve.movementGood||'',eve.screentime||'',eve.coffee||'',eve.rumination||'',
+        eve.acuteMeds?.includes('domperidon')?'Ja':'',
+        eve.acuteMeds?.includes('ibuprofen')?'Ja':'',eve.ibuprofenDose||'',
+        eve.acuteMeds?.includes('triptan')?'Ja':'',eve.triptanDose||'',
+        eve.acuteMeds?.includes('duofer')?'Ja':'',
+        eve.acuteMeds?.includes('magnesium')?'Ja':'',
+        bpStr,
+        (eve.triggers||'').replace(/,/g,';'),(eve.notes||'').replace(/,/g,';')
+      ]);
+    }
+  }
+  const csv=rows.map(r=>r.map(v=>`"${v}"`).join(',')).join('\n');
+  const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download='migraene_2026.csv'; a.click();
+  URL.revokeObjectURL(url);
+  showToast('⬇️ CSV exportiert!');
+}
+
+// ── BLOOD PRESSURE IMPORT ────────────────────────────────
+// Called programmatically when BP data is provided
+window.importBPData = function(bpArray) {
+  // bpArray: [{date:'2026-01-05', time:'07:32', sys:128, dia:82, pulse:72}, ...]
+  const byDate = {};
+  bpArray.forEach(m => {
+    if(!byDate[m.date]) byDate[m.date]=[];
+    byDate[m.date].push({time:m.time, sys:m.sys, dia:m.dia, pulse:m.pulse});
+  });
+  Object.entries(byDate).forEach(([date,list]) => {
+    save('bp_'+date, {list});
+  });
+  showToast('💉 Blutdruckdaten importiert!');
+  if(currentTab==='morning'||currentTab==='evening') renderBP('bp-'+(currentTab==='morning'?'morning':'evening')+'-list');
+};
+
+// ── INIT ────────────────────────────────────────────────
+// Load all localStorage keys into memCache on startup
+(function() {
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key.startsWith('mor_') || key.startsWith('eve_') || key.startsWith('bp_')) {
+      try { memCache[key] = JSON.parse(localStorage.getItem(key)); } catch(e) {}
+    }
+  }
+})();
+initPills();
+updateDateLabel();
+switchTab('morning');
+checkSundayBanner();
+// Check every hour if Sunday banner should show/hide
+setInterval(checkSundayBanner, 3600000);
+// Init Google Auth (requires Google Identity Services script)
+window.addEventListener('load', () => {
+  if (typeof google !== 'undefined') initGoogleAuth();
+});
+</script>
+</body>
+</html>
