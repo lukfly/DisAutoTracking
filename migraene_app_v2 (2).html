@@ -563,6 +563,7 @@ const WEEKDAYS = ['Mo','Di','Mi','Do','Fr','Sa','So'];
 const MONTHS = ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
 
 function dateKey(d) {
+  // Use local date to avoid UTC timezone shift (e.g. CH is UTC+2)
   const y = d.getFullYear();
   const m = String(d.getMonth()+1).padStart(2,'0');
   const day = String(d.getDate()).padStart(2,'0');
@@ -570,18 +571,17 @@ function dateKey(d) {
 }
 
 // ── GOOGLE DRIVE SYNC ────────────────────────────────────
-const DRIVE_FILE_NAME = 'migraine_diary_data.json'; // An deinen Drive-Namen angepasst!
+const DRIVE_FILE_NAME = 'migraene_tagebuch_daten.json';
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.appdata';
 const CLIENT_ID = '799152036238-rgv5m6ng5ut359d52vepf34t4f1e3jud.apps.googleusercontent.com';
-const API_KEY = 'AIzaSyBf9rsnVp2MamWObWe75rCtMRbCsccbdjQ'; // <-- HIER DEINEN GOOGLE CLOUD API KEY EINTRAGEN!
-
-const AUTHORIZED_ORIGIN = 'https://lukfly.github.io'; 
+const AUTHORIZED_ORIGIN = 'https://lukfly.github.io'; // GitHub Pages URL
 let gisClient = null;
 let driveFileId = null;
-let memCache = {}; 
+let memCache = {}; // In-memory cache für alle Daten
 let syncTimer = null;
-let syncState = 'local'; 
+let syncState = 'local'; // 'local' | 'ok' | 'syncing' | 'error'
 
+// Fallback: localStorage wenn Drive nicht verbunden
 function loadLocal(key) { try { return JSON.parse(localStorage.getItem(key)||'null'); } catch(e) { return null; } }
 function saveLocal(key, val) { localStorage.setItem(key, JSON.stringify(val)); }
 
@@ -593,7 +593,7 @@ function load(key) {
 
 function save(key, val) {
   memCache[key] = val;
-  saveLocal(key, val);
+  saveLocal(key, val); // Sofort lokal speichern
   scheduleDriveSync();
 }
 
@@ -607,6 +607,7 @@ function setSyncStatus(state, msg) {
 }
 
 function scheduleDriveSync() {
+  // Sync immediately after save, not delayed
   syncToDrive();
 }
 
@@ -626,6 +627,7 @@ function initGoogleAuth() {
     callback: async (resp) => {
       if (resp.error) { setSyncStatus('error', 'Anmeldung fehlgeschlagen'); return; }
       window._gToken = resp.access_token;
+      // Token expires in ~1 hour — auto-refresh
       setTimeout(() => {
         if (gisClient) gisClient.requestAccessToken({prompt: ''});
       }, 55 * 60 * 1000);
@@ -638,6 +640,7 @@ function initGoogleAuth() {
 
 function connectDrive() {
   if (!gisClient) {
+    // Google script noch nicht geladen — nochmal versuchen
     initGoogleAuth();
     if (!gisClient) {
       setSyncStatus('error', 'Google nicht verfügbar');
@@ -652,44 +655,50 @@ function connectDrive() {
 async function loadFromDrive() {
   try {
     setSyncStatus('syncing', 'Lade Daten...');
-    let keyQuery = (API_KEY && API_KEY !== 'DEIN_API_KEY_HIER') ? '&key=' + API_KEY : '';
     const searchRes = await fetch(
-      'https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=name%3D%22'+DRIVE_FILE_NAME+'%22&fields=files(id,name)' + keyQuery,
+      'https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=name%3D%22'+DRIVE_FILE_NAME+'%22&fields=files(id,name)',
       { headers: { Authorization: 'Bearer ' + window._gToken } }
     );
     const searchData = await searchRes.json();
     if (searchData.files && searchData.files.length > 0) {
       driveFileId = searchData.files[0].id;
       const fileRes = await fetch(
-        'https://www.googleapis.com/drive/v3/files/' + driveFileId + '?alt=media' + keyQuery,
+        'https://www.googleapis.com/drive/v3/files/' + driveFileId + '?alt=media',
         { headers: { Authorization: 'Bearer ' + window._gToken } }
       );
       const driveData = await fileRes.json();
 
+      // Smart merge: compare savedAt timestamps, newest wins
       Object.entries(driveData).forEach(([k, driveVal]) => {
         const localVal = memCache[k];
         if (!localVal) {
+          // Only in Drive → use Drive
           memCache[k] = driveVal;
           saveLocal(k, driveVal);
         } else {
+          // Both exist → compare savedAt, newest wins
           const driveTime = driveVal.savedAt || '';
           const localTime = localVal.savedAt || '';
           if (driveTime > localTime) {
             memCache[k] = driveVal;
             saveLocal(k, driveVal);
           }
+          // else local is newer, keep local
         }
       });
 
+      // After merge, push merged data back to Drive
       await syncToDrive();
       setSyncStatus('ok', 'Drive synchronisiert ✓');
     } else {
+      // No Drive file yet — upload local data
       setSyncStatus('syncing', 'Erstelle Drive-Datei...');
       await syncToDrive();
       setSyncStatus('ok', 'Drive verbunden ✓');
     }
     const btn = document.getElementById('sync-connect-btn');
     if (btn) btn.style.display = 'none';
+    // Refresh current view with merged data
     if (currentTab !== 'calendar') loadDayData();
     else renderCalendar();
   } catch(e) {
@@ -700,19 +709,17 @@ async function loadFromDrive() {
 
 // ── DRIVE: SAVE ──────────────────────────────────────────
 async function syncToDrive() {
-  if (!window._gToken) return;
+  if (!window._gToken) return; // Not connected, localStorage only
   try {
     setSyncStatus('syncing', 'Speichere...');
     const content = JSON.stringify(memCache);
     const metadata = { name: DRIVE_FILE_NAME, parents: ['appDataFolder'] };
     let url, method;
-    let keyQuery = (API_KEY && API_KEY !== 'DEIN_API_KEY_HIER') ? '&key=' + API_KEY : '';
-
     if (driveFileId) {
-      url = 'https://www.googleapis.com/upload/drive/v3/files/' + driveFileId + '?uploadType=multipart' + keyQuery;
+      url = 'https://www.googleapis.com/upload/drive/v3/files/' + driveFileId + '?uploadType=multipart';
       method = 'PATCH';
     } else {
-      url = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart' + keyQuery;
+      url = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart';
       method = 'POST';
     }
     const boundary = '-------migraene_boundary';
@@ -751,8 +758,10 @@ function checkSundayBanner() {
 
 
 // ── EXCEL IMPORT DATA ────────────────────────────────────
+// Imported from Migraene_Tagebuch.xlsx (timezone-fixed, correct med start dates)
 (function() {
   const importedData = {"mor_2026-06-19": {"sleepQuality": "Mittel", "meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": false}, "savedAt": "2026-06-19T08:00:00.000Z", "sleepDuration": "7.0"}, "eve_2026-06-19": {"migraineDay": "Nein", "dizziness": "1", "dayIntensity": "1", "brainFog": "0", "mood": "3", "movement": "Leicht", "screentime": "Mittel", "coffee": "3", "rumination": "Ja", "notes": "guter Tag, nach gestrigem Blödsinn Tag. heute kleine, leichte Bikerunde gemacht vor Akupunktur", "savedAt": "2026-06-19T20:00:00.000Z"}, "mor_2026-06-20": {"sleepQuality": "Schlecht", "meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": false}, "savedAt": "2026-06-20T08:00:00.000Z", "sleepDuration": "7.0"}, "eve_2026-06-20": {"migraineDay": "Ja", "dizziness": "2", "dayIntensity": "0", "brainFog": "0", "mood": "2", "movement": "Nichts", "screentime": "Viel", "coffee": "2", "rumination": "Ja", "acuteMeds": ["schmerzmittel"], "notes": "mega starke KS am Tag; beim Aufstehen und still stehen sehr hoher Puls;", "savedAt": "2026-06-20T20:00:00.000Z"}, "mor_2026-06-21": {"sleepQuality": "Gut", "meds": {"elvanse": false, "betmiga": false, "toviaz": false, "carvedilol": false}, "savedAt": "2026-06-21T08:00:00.000Z", "sleepDuration": "8.0"}, "eve_2026-06-21": {"migraineDay": "Nein", "dizziness": "3", "dayIntensity": "2", "brainFog": "2", "mood": "2", "movement": "Leicht", "screentime": "Wenig", "coffee": "2", "rumination": "Nein", "notes": "Wanderung Tag 2", "savedAt": "2026-06-21T20:00:00.000Z"}, "mor_2026-06-22": {"sleepQuality": "Mittel", "meds": {"elvanse": false, "betmiga": false, "toviaz": false, "carvedilol": false}, "savedAt": "2026-06-22T08:00:00.000Z", "sleepDuration": "8.0"}, "eve_2026-06-22": {"migraineDay": "Nein", "dizziness": "3", "dayIntensity": "2", "brainFog": "3", "mood": "2", "movement": "Leicht", "screentime": "Wenig", "coffee": "2", "rumination": "Nein", "notes": "Wanderung Tag 1", "savedAt": "2026-06-22T20:00:00.000Z"}, "mor_2026-06-23": {"sleepQuality": "Gut", "meds": {"elvanse": false, "betmiga": false, "toviaz": false, "carvedilol": false}, "savedAt": "2026-06-23T08:00:00.000Z", "sleepDuration": "9.0"}, "eve_2026-06-23": {"migraineDay": "Nein", "dizziness": "2", "brainFog": "3", "mood": "1", "movement": "Nichts", "screentime": "Mittel", "coffee": "2", "rumination": "Ja", "notes": "schlechte Stimmung ganzer Tag, nach Velorunde am Abend gerade viel besser.", "savedAt": "2026-06-23T20:00:00.000Z"}, "mor_2026-06-24": {"sleepQuality": "Gut", "meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": false}, "elvanseDose": "Ja 2x 10mg", "savedAt": "2026-06-24T08:00:00.000Z"}, "eve_2026-06-24": {"migraineDay": "Ja", "dizziness": "2", "dayIntensity": "1", "mood": "1", "movement": "Nichts", "screentime": "Mittel", "coffee": "2", "rumination": "Ja", "acuteMeds": ["schmerzmittel"], "notes": "Heftige KS heute! Arzttermine (Stehtest) und neue Termin Neuro endlich!! danach viel bessere Stimmung.", "savedAt": "2026-06-24T20:00:00.000Z"}, "mor_2026-06-25": {"sleepQuality": "Schlecht", "meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": false}, "savedAt": "2026-06-25T08:00:00.000Z", "sleepDuration": "6.0"}, "eve_2026-06-25": {"migraineDay": "Nein", "dizziness": "2", "dayIntensity": "3", "brainFog": "0", "mood": "3", "movement": "Nichts", "screentime": "Wenig", "coffee": "2", "rumination": "Ja", "notes": "Bei Eltern Essen und viel Diskutieren, dann an Höchi Abschlussfest. Zwischenzeitlich sehr starke pots symptome.", "savedAt": "2026-06-25T20:00:00.000Z"}, "mor_2026-06-26": {"sleepQuality": "Schlecht", "meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": false}, "savedAt": "2026-06-26T08:00:00.000Z", "sleepDuration": "7.0"}, "eve_2026-06-26": {"migraineDay": "Nein", "dizziness": "1", "dayIntensity": "3", "brainFog": "0", "mood": "4", "movement": "Leicht", "screentime": "Wenig", "coffee": "2", "rumination": "Ja", "notes": "Limmat mit Sheyla, Foil Boarding.", "savedAt": "2026-06-26T20:00:00.000Z"}, "mor_2026-06-27": {"sleepQuality": "Gut", "meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": false}, "savedAt": "2026-06-27T08:00:00.000Z", "sleepDuration": "6.0"}, "eve_2026-06-27": {"migraineDay": "Nein", "dizziness": "2", "dayIntensity": "1", "brainFog": "2", "mood": "3", "movement": "Nichts", "screentime": "Viel", "coffee": "2", "rumination": "Nein", "notes": "pots symptome mit auffälligem Schwächegefühl in Beinen im Stehen am BHF vor Tanzen. Im Tägipark überfordert und schwindlig. Sehr fatigue. Abend bei Sheyla. Ansonsten guter Tag.", "savedAt": "2026-06-27T20:00:00.000Z"}, "mor_2026-06-28": {"sleepQuality": "Gut", "meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": false}, "savedAt": "2026-06-28T08:00:00.000Z", "sleepDuration": "6.0"}, "eve_2026-06-28": {"migraineDay": "Nein", "dizziness": "1", "dayIntensity": "1", "brainFog": "3", "mood": "3", "movement": "Nichts", "screentime": "Mittel", "coffee": "2", "rumination": "Nein", "notes": "Starke fatigue", "savedAt": "2026-06-28T20:00:00.000Z"}, "mor_2026-06-29": {"sleepQuality": "Gut", "meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": false}, "elvanseDose": "Ja 30+30", "savedAt": "2026-06-29T08:00:00.000Z", "sleepDuration": "6.0"}, "eve_2026-06-29": {"migraineDay": "Nein", "dizziness": "0", "dayIntensity": "0", "brainFog": "2", "mood": "2", "movement": "Nichts", "screentime": "Wenig", "coffee": "2", "rumination": "Nein", "savedAt": "2026-06-29T20:00:00.000Z"}, "mor_2026-06-30": {"sleepQuality": "Gut", "meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": false}, "savedAt": "2026-06-30T08:00:00.000Z", "sleepDuration": "7.0"}, "eve_2026-06-30": {"migraineDay": "Nein", "dizziness": "0", "dayIntensity": "1", "mood": "1", "movement": "Leicht", "screentime": "Wenig", "coffee": "2", "rumination": "Nein", "notes": "40mg und 20mg (Stimmung depressiv); Badi Tiefenbrunnen; Tanzen sehr intensiv KS nach Training; extrem viel geschwitzt; Bouillon zuhause getrunken", "savedAt": "2026-06-30T20:00:00.000Z"}, "mor_2026-07-01": {"sleepQuality": "Gut", "meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": false}, "savedAt": "2026-07-01T08:00:00.000Z", "sleepDuration": "8.0"}, "eve_2026-07-01": {"migraineDay": "Ja", "dizziness": "3", "dayIntensity": "1", "brainFog": "1", "mood": "3", "movement": "Nichts", "screentime": "Mittel", "coffee": "2", "rumination": "Nein", "acuteMeds": ["schmerzmittel"], "urination": "dehydration und intensiver Sport Tag zuvor", "notes": "Schwindel und Geräuschempfindlichkeit Mittag, Triptan genommen Wirkung nicht sonderlich gut (eher Pots?), akupunktur (erstes Mal voll eingeschlafen), mit Ari Halo Halle 3 Stunden, Abend zu viel Handy", "savedAt": "2026-07-01T20:00:00.000Z"}, "mor_2026-07-02": {"sleepQuality": "Gut", "meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": false}, "savedAt": "2026-07-02T08:00:00.000Z", "sleepDuration": "8.0"}, "eve_2026-07-02": {"migraineDay": "Nein", "dizziness": "1", "dayIntensity": "2", "brainFog": "0", "mood": "2", "movement": "Nichts", "screentime": "Wenig", "coffee": "2", "rumination": "Nein", "notes": "mami papi ässe iglade,therapie, grillnchill, am Abend langsam Kopfschmerzen und sehr müde", "savedAt": "2026-07-02T20:00:00.000Z"}, "mor_2026-07-03": {"sleepQuality": "Gut", "meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": false}, "savedAt": "2026-07-03T08:00:00.000Z", "sleepDuration": "8.0"}, "eve_2026-07-03": {"migraineDay": "Ja", "dizziness": "2", "dayIntensity": "1", "brainFog": "2", "mood": "1", "movement": "Nichts", "screentime": "Mittel", "coffee": "2", "rumination": "Nein", "urination": "emotionaler Stress, zu wenig gegessen, viel los am Tag zuvor, unregelmässig und zu wenig gegessen", "notes": "Bemerkt, dass ich mit PH Bock geschossen habe, interner Stress führt gleich zu Schwindel, Stimmung tief,Mittagessen halb ausgelassen, KS gegen Abend, extrem Müde und demotiviert/fatigue am Abend", "savedAt": "2026-07-03T20:00:00.000Z"}, "mor_2026-07-04": {"sleepQuality": "Gut", "meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": false}, "savedAt": "2026-07-04T08:00:00.000Z", "sleepDuration": "9.0"}, "eve_2026-07-04": {"migraineDay": "Ja", "dizziness": "3", "dayIntensity": "0", "brainFog": "2", "mood": "1", "movement": "Nichts", "screentime": "Viel", "coffee": "2", "rumination": "Ja", "acuteMeds": ["schmerzmittel"], "notes": "extrem unguter Morgen, starke Symptome mit RE (Reizempf.), meist nur liegen, Kaffi mit Ari ok, zuhause um 4 Uhr besser, konnte Wähe machen, dann sehr müde und schnell erschöpft (treppe gehen), MECFS Angst (Rainer und Cousine vo Clara) und am Abend mega genervt ab allem und panisch.", "savedAt": "2026-07-04T20:00:00.000Z"}, "mor_2026-07-05": {"sleepQuality": "Mittel", "meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": false}, "savedAt": "2026-07-05T08:00:00.000Z", "sleepDuration": "6.0"}, "eve_2026-07-05": {"migraineDay": "Nein", "dizziness": "2", "dayIntensity": "3", "brainFog": "2", "mood": "3", "movement": "Leicht", "screentime": "Wenig", "coffee": "2", "notes": "bouldern murgtal", "savedAt": "2026-07-05T20:00:00.000Z"}, "mor_2026-07-06": {"sleepQuality": "Gut", "meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": false}, "savedAt": "2026-07-06T08:00:00.000Z", "sleepDuration": "8.0"}, "eve_2026-07-06": {"migraineDay": "Ja", "dizziness": "3", "brainFog": "3", "mood": "2", "movement": "Nichts", "screentime": "Wenig", "coffee": "2", "acuteMeds": ["schmerzmittel"], "notes": "Start Ferien, keine 20mg Dosis Mittag, Schlafen im Zug, Hitze war anstrengend, sonst okay, sehr müde", "savedAt": "2026-07-06T20:00:00.000Z"}, "mor_2026-07-07": {"sleepQuality": "Gut", "meds": {"elvanse": false, "betmiga": false, "toviaz": false, "carvedilol": false}, "savedAt": "2026-07-07T08:00:00.000Z", "sleepDuration": "10.0"}, "eve_2026-07-07": {"migraineDay": "Ja", "dizziness": "4", "dayIntensity": "1", "brainFog": "4", "mood": "0", "movement": "Nichts", "screentime": "Wenig", "coffee": "3", "rumination": "Nein", "acuteMeds": ["schmerzmittel"], "urination": "kein Elvanse", "notes": "ganzer Tag extrem erschöpft und Schwindel, triptan am morgen naja, noch nie so schlimm ganzerTag, Zugfahrt horror, Busalla schlafen am Tag, keine Kraft!", "savedAt": "2026-07-07T20:00:00.000Z"}, "mor_2026-07-08": {"sleepQuality": "Gut", "meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": false}, "savedAt": "2026-07-08T08:00:00.000Z", "sleepDuration": "9.0"}, "eve_2026-07-08": {"migraineDay": "Nein", "dizziness": "3", "dayIntensity": "1", "brainFog": "2", "mood": "3", "movement": "Leicht", "screentime": "Mittel", "coffee": "2", "rumination": "Nein", "notes": "Morgen extrem erschöpft immernoch, elvanse genommen wurde besser, 20mg Dosis in 3Teilen genommen, letzte um 5 Uhr, viel bessere Energie, kleine Wanderung zu See,", "savedAt": "2026-07-08T20:00:00.000Z"}, "mor_2026-07-09": {"sleepQuality": "Mittel", "meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": false}, "savedAt": "2026-07-09T08:00:00.000Z", "sleepDuration": "8.0"}, "eve_2026-07-09": {"migraineDay": "Nein", "dizziness": "1", "dayIntensity": "1", "brainFog": "1", "mood": "3", "movement": "Nichts", "screentime": "Mittel", "coffee": "2", "rumination": "Nein", "notes": "genova Tagesausflug, Strand,Schnorchle, Buech läse, sehr cool! viel Energie au am Abig zumChuchi mache", "savedAt": "2026-07-09T20:00:00.000Z"}, "mor_2026-07-10": {"sleepQuality": "Mittel", "meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": false}, "savedAt": "2026-07-10T08:00:00.000Z", "sleepDuration": "7.0"}, "eve_2026-07-10": {"migraineDay": "Ja", "dizziness": "3", "dayIntensity": "2", "brainFog": "2", "mood": "3", "movement": "Nichts", "screentime": "Wenig", "coffee": "2", "rumination": "Nein", "acuteMeds": ["schmerzmittel"], "urination": "nach Mitternacht ins Bett, nicht so guter Schlaf", "notes": "elvanse 20mg in zwei Teile", "savedAt": "2026-07-10T20:00:00.000Z"}, "mor_2026-07-11": {"meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": false}, "savedAt": "2026-07-11T08:00:00.000Z", "sleepDuration": "8.0"}, "eve_2026-07-11": {"migraineDay": "Ja", "dayIntensity": "2", "acuteMeds": ["schmerzmittel"], "urination": "am Morgen schon Nackenverspannung, gefühlt im Halswirbel, nicht nur muskulär; zu wenig gegessen, sonnenbrand gekriegt", "notes": "Migräne mit Aura um 16.30 Uhr im Parknsch Focaccia. 2 Triptane nach 1 Stunde ca. Kopfschmerz auf rechterSeite plus Spannungskopfschmerz. Wie gelähmt, musste brown noise machen, loop war zuwenig", "savedAt": "2026-07-11T20:00:00.000Z"}, "mor_2026-07-12": {"meds": {"elvanse": false, "betmiga": false, "toviaz": false, "carvedilol": false}, "savedAt": "2026-07-12T08:00:00.000Z"}, "eve_2026-07-12": {"migraineDay": "Nein", "notes": "fähre nach Bastia, Müdigkeit und etwas KS nach Migräne Tag, vor Scooter abfahren Schwindel aber mit Essen und Trinken etwas besser", "savedAt": "2026-07-12T20:00:00.000Z"}, "mor_2026-07-13": {"meds": {"elvanse": false, "betmiga": false, "toviaz": false, "carvedilol": false}, "savedAt": "2026-07-13T08:00:00.000Z"}, "eve_2026-07-13": {"migraineDay": "Nein", "notes": "mit 50cc Moriani Beach, gut :)", "savedAt": "2026-07-13T20:00:00.000Z"}, "mor_2026-07-14": {"sleepQuality": "Gut", "meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": false}, "savedAt": "2026-07-14T08:00:00.000Z", "sleepDuration": "8.0"}, "eve_2026-07-14": {"migraineDay": "Nein", "dizziness": "0", "dayIntensity": "3", "brainFog": "0", "mood": "4", "movement": "Leicht", "screentime": "Wenig", "coffee": "2", "rumination": "Nein", "notes": "Boot Tag mit 125cc, nur am Morge chli Schwindel denn Ibu gnoh", "savedAt": "2026-07-14T20:00:00.000Z"}, "mor_2026-07-15": {"meds": {"elvanse": false, "betmiga": false, "toviaz": false, "carvedilol": false}, "savedAt": "2026-07-15T08:00:00.000Z"}, "eve_2026-07-15": {"migraineDay": "Nein", "notes": "Scooter, Wandere zum, Wasserfall, Cliffjumping, Strand. auch guter Tag", "savedAt": "2026-07-15T20:00:00.000Z"}, "mor_2026-07-16": {"sleepQuality": "Schlecht", "meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": false}, "savedAt": "2026-07-16T08:00:00.000Z", "sleepDuration": "7.0"}, "eve_2026-07-16": {"migraineDay": "Ja", "dizziness": "2", "dayIntensity": "0", "brainFog": "2", "mood": "2", "movement": "Nichts", "screentime": "Mittel", "coffee": "2", "acuteMeds": ["schmerzmittel"], "notes": "längere Scoooterfahrt geplant, nach 20min abgebrochen, nicht ganz gut gefühlt (Schwindel), später Migräne Verdacht, IBU genommen, gechillt den restlichen Tag, Abend nochmals IBU vor Schlafen", "savedAt": "2026-07-16T20:00:00.000Z"}, "mor_2026-07-17": {"meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": false}, "savedAt": "2026-07-17T08:00:00.000Z"}, "eve_2026-07-17": {"migraineDay": "Ja", "dizziness": "2", "dayIntensity": "0", "brainFog": "2", "movement": "Nichts", "coffee": "2", "acuteMeds": ["schmerzmittel"], "notes": "auch wieder nicht möglich die lange Strecke zum Strand, Planänderung. bevor schon 2 Ibus genommen aber nicht genug geholfen.  eher aus Vorsicht von der Rückfahrt nach langem Tag abgebrochen.", "savedAt": "2026-07-17T20:00:00.000Z"}, "mor_2026-07-18": {"meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": false}, "savedAt": "2026-07-18T08:00:00.000Z"}, "eve_2026-07-18": {"migraineDay": "Nein", "movement": "Nichts", "notes": "zugfahrt nach ajaccio; eigentlich ziemlich okay", "savedAt": "2026-07-18T20:00:00.000Z"}, "mor_2026-07-19": {"meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": false}, "savedAt": "2026-07-19T08:00:00.000Z"}, "eve_2026-07-19": {"migraineDay": "Nein", "movement": "Nichts", "notes": "Vor Isle de Sanguire einsamer Strand gefunden, war alles gut", "savedAt": "2026-07-19T20:00:00.000Z"}, "mor_2026-07-20": {"meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": false}, "savedAt": "2026-07-20T08:00:00.000Z"}, "eve_2026-07-20": {"migraineDay": "Nein", "movement": "Nichts", "notes": "Treffen mit Philip und Leonie an Strand, Schwindel hielt sich in Grenzen", "savedAt": "2026-07-20T20:00:00.000Z"}, "mor_2026-07-21": {"meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": false}, "savedAt": "2026-07-21T08:00:00.000Z"}, "eve_2026-07-21": {"migraineDay": "Nein", "movement": "Nichts", "notes": "letzter Tag Korsika, herausgefunden, dass Fähre nach Toulon und nicht Marseille geht, auf Fähre lange gestanden, Druck im Kopf, Nackenschmerz und so Druck in Brust", "savedAt": "2026-07-21T20:00:00.000Z"}, "mor_2026-07-22": {"meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": false}, "savedAt": "2026-07-22T08:00:00.000Z"}, "eve_2026-07-22": {"migraineDay": "Nein", "movement": "Nichts", "notes": "Reisetag, pretty okay, irgendwann sehr Unruhig im Zug aber ok, schnell alles ausgepackt zuhause endlich etwas machen", "savedAt": "2026-07-22T20:00:00.000Z"}, "mor_2026-07-23": {"sleepQuality": "Gut", "meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": false}, "savedAt": "2026-07-23T08:00:00.000Z", "sleepDuration": "9.0"}, "eve_2026-07-23": {"migraineDay": "Ja", "mood": "3", "movement": "Nichts", "screentime": "Mittel", "coffee": "3", "acuteMeds": ["schmerzmittel"], "notes": "wieder zuhause / länger geschlafen, Buch gelesen, dann ziemlich hyperaktiv, aber auch Unruhe und Nackenverspannung (Migräne Vorbote?), zweiter Kaffe, viel Durst, Kopfschmerzen kommen um ca. 11 Uhr\nstarke POTS Symptome", "savedAt": "2026-07-23T20:00:00.000Z"}, "mor_2026-07-24": {"sleepQuality": "Gut", "meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": false}, "savedAt": "2026-07-24T08:00:00.000Z", "sleepDuration": "9.0"}, "eve_2026-07-24": {"migraineDay": "Nein", "dayIntensity": "1", "brainFog": "0", "mood": "3", "movement": "Leicht", "screentime": "Wenig", "coffee": "3", "rumination": "Nein", "notes": "morgen pots, viel gelegen und gelesen, Tennis am Nachmittag, starker Schwindel gegen Schluss, Kopfschmerzen gegen Abend nach Essen, heftig vor Schlafen (gut am nächsten Morgen) -- guter Tag mit Eltere", "savedAt": "2026-07-24T20:00:00.000Z"}, "mor_2026-07-25": {"sleepQuality": "Gut", "meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": false}, "savedAt": "2026-07-25T08:00:00.000Z", "sleepDuration": "8.0"}, "eve_2026-07-25": {"migraineDay": "Nein", "dayIntensity": "0", "brainFog": "2", "movement": "Nichts", "coffee": "2", "notes": "keine Nachmittag Dosis Elvanse - sehr Müde zwischenzeitlich und am Abend", "savedAt": "2026-07-25T20:00:00.000Z"}, "mor_2026-07-26": {"sleepQuality": "Schlecht", "meds": {"elvanse": false, "betmiga": false, "toviaz": false, "carvedilol": false}, "savedAt": "2026-07-26T08:00:00.000Z", "sleepDuration": "7.0"}, "eve_2026-07-26": {"notes": "Basel mit Juan und Clara / zwei Bier getrunken", "savedAt": "2026-07-26T20:00:00.000Z"}, "mor_2026-07-27": {"meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": true}, "savedAt": "2026-07-27T08:00:00.000Z"}, "eve_2026-07-27": {"migraineDay": "Ja", "movement": "Leicht", "notes": "Bike Altberg Downhill / nicht fit, viele Pausen / Kardiologie am Nachmittag", "savedAt": "2026-07-27T20:00:00.000Z"}, "mor_2026-07-28": {"meds": {"elvanse": false, "betmiga": false, "toviaz": false, "carvedilol": false}, "savedAt": "2026-07-28T08:00:00.000Z"}, "eve_2026-07-28": {"notes": "Tiia wegen Pornos angesprochen - starke emotionale Reaktion, nicht darüber gesprochen was mich emptional fertig gemacht hat", "savedAt": "2026-07-28T20:00:00.000Z"}, "mor_2026-07-29": {"sleepQuality": "Mittel", "meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": true}, "savedAt": "2026-07-29T08:00:00.000Z", "sleepDuration": "7.0"}, "eve_2026-07-29": {"migraineDay": "Ja", "dizziness": "3", "dayIntensity": "3", "brainFog": "1", "movement": "Nichts", "screentime": "Wenig", "coffee": "3", "acuteMeds": ["schmerzmittel"], "notes": "sher viel im Haushalt gemacht - zielstrebig\nSchwindelattacke bei Wäsche rausnehmen am Nachmittag\nIBU nach Urologie genommen\nAbend bei Freunden / 1 Bier getrunken", "savedAt": "2026-07-29T20:00:00.000Z"}, "mor_2026-07-30": {"sleepQuality": "Schlecht", "meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": true}, "savedAt": "2026-07-30T08:00:00.000Z", "sleepDuration": "8.0"}, "eve_2026-07-30": {"migraineDay": "Ja", "dayIntensity": "0", "movement": "Nichts", "screentime": "Mittel", "coffee": "2", "acuteMeds": ["schmerzmittel"], "notes": "Kopfschmerzen am morgen / Schwindelattacken vor PC / nicht ausgeschlafen / spüre dass ich Alkohol getrunken habe / ganzer Tag gelegen", "savedAt": "2026-07-30T20:00:00.000Z"}, "mor_2026-07-31": {"sleepQuality": "Gut", "meds": {"elvanse": true, "betmiga": true, "toviaz": true, "carvedilol": true}, "elvanseDose": "Elvanse 60mg", "savedAt": "2026-07-31T08:00:00.000Z", "sleepDuration": "8.0"}, "eve_2026-07-31": {"migraineDay": "Ja", "dizziness": "3", "dayIntensity": "0", "brainFog": "2", "mood": "1", "movement": "Nichts", "screentime": "Mittel", "coffee": "1", "rumination": "Nein", "notes": "Heftige KS am Morgen schon und Steifer Nacken / krasse Schwindel nacih Akupunktur / ibu und triptan / nur 30mg elvanse/ Puls geht nicht unter 70 auch im Liegen, sogar am Abend\nam Abend Schmerzen im Unterbauch", "savedAt": "2026-07-31T20:00:00.000Z"}, "mor_2026-08-01": {"sleepQuality": "Mittel", "meds": {"elvanse": false, "betmiga": false, "toviaz": false, "carvedilol": false}, "savedAt": "2026-08-01T08:00:00.000Z", "sleepDuration": "8.0"}, "eve_2026-08-01": {"migraineDay": "Nein", "notes": "puls 160 bei leichtem hochfahren mit Velo, typische Symptome von Überanstrengung danach / auch so leicht fiebriges Gefühl wie letzte zwei Migränetage\n1. August bei Freunden verbracht bis 1 Uhr morgens.", "savedAt": "2026-08-01T20:00:00.000Z"}, "mor_2026-08-02": {"sleepQuality": "Mittel", "meds": {"elvanse": false, "betmiga": false, "toviaz": false, "carvedilol": false}, "savedAt": "2026-08-02T08:00:00.000Z", "sleepDuration": "8.0"}, "eve_2026-08-02": {"notes": "1 Uhr bis 9 Uhr geschlafen;", "savedAt": "2026-08-02T20:00:00.000Z"}};
+  // Always re-import to overwrite old shifted data
   const importVersion = 'v2_tzfix';
   const done = localStorage.getItem('excel_import_' + importVersion);
   if (!done) {
@@ -775,6 +784,7 @@ function makePills(id, vals, field, mode) {
   });
 }
 function initPills() {
+  // urination now uses counter, no pills needed
 }
 
 let urinationCount = 0;
@@ -801,6 +811,7 @@ function calcSleepDuration() {
   const [wh,wm] = wake.split(':').map(Number);
   let bedMins = bh*60+bm;
   let wakeMins = wh*60+wm;
+  // If wake is before bed, assume slept past midnight
   if (wakeMins <= bedMins) wakeMins += 24*60;
   const totalMins = wakeMins - bedMins;
   const hours = Math.floor(totalMins/60);
@@ -904,6 +915,7 @@ function loadDayData() {
 
 function loadMorning() {
   const d = load(mKey(currentDate));
+  // Reset
   document.querySelectorAll('[data-f]').forEach(b => {
     if(['sleepQuality','breakfastMissed','energyMorning'].includes(b.dataset.f)) b.classList.remove('sel-m','sel-e','sel-g','sel-r');
   });
@@ -930,8 +942,10 @@ function loadMorning() {
 
 function loadEvening() {
   const d = load(eKey(currentDate));
+  // Reset all evening segs
   const eveFields = ['migraineDay','dizziness','headache','pots','sensitivity','brainFog','dayIntensity','mood','energyEvening','movement','movementGood','screentime','coffee','rumination','triptanDose'];
   eveFields.forEach(f => document.querySelectorAll(`[data-f="${f}"]`).forEach(b=>b.classList.remove('sel-m','sel-e','sel-g','sel-r')));
+  // Reset urination counter
   setUrination(0);
   document.querySelectorAll('#pills-urination .pill').forEach(p=>p.className='pill');
   ['domperidon','ibuprofen','triptan','duofer','magnesium'].forEach(m=>{const el=document.getElementById('acute-'+m);if(el){el.classList.remove('checked');el.textContent='';}});
@@ -1054,11 +1068,15 @@ function renderCalendar() {
       const dayEl=document.createElement('div'); dayEl.className='cal-day';
       const today=new Date();today.setHours(0,0,0,0);
       if(date.getTime()===today.getTime()) dayEl.classList.add('today');
-
+      // Migraine
       if(eve.migraineDay==='Ja') dayEl.classList.add('migraine');
+      // Strong dizziness (3 or 4)
       if(parseInt(eve.dizziness)>=3) dayEl.classList.add('strong-dizziness');
+      // Bad sleep
       if(mor.sleepQuality==='Schlecht') dayEl.classList.add('bad-sleep');
+      // High BP
       if(bp.list && bp.list.some(m=>parseInt(m.sys)>135||parseInt(m.dia)>100)) dayEl.classList.add('high-bp');
+      // ADHS not taken
       const adhs_missed = mor.meds && mor.meds.elvanse===false;
 
       const num=document.createElement('div'); num.className='day-num'; num.textContent=d; dayEl.appendChild(num);
@@ -1180,7 +1198,9 @@ function exportCSV() {
 }
 
 // ── BLOOD PRESSURE IMPORT ────────────────────────────────
+// Called programmatically when BP data is provided
 window.importBPData = function(bpArray) {
+  // bpArray: [{date:'2026-01-05', time:'07:32', sys:128, dia:82, pulse:72}, ...]
   const byDate = {};
   bpArray.forEach(m => {
     if(!byDate[m.date]) byDate[m.date]=[];
@@ -1195,6 +1215,7 @@ window.importBPData = function(bpArray) {
 
 
 // ── INIT ────────────────────────────────────────────────
+// Load all localStorage keys into memCache on startup
 (function() {
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
@@ -1207,10 +1228,13 @@ initPills();
 updateDateLabel();
 switchTab('morning');
 checkSundayBanner();
+// Check every hour if Sunday banner should show/hide
 setInterval(checkSundayBanner, 3600000);
+// Init Google Auth (requires Google Identity Services script)
 window.addEventListener('load', () => {
   if (typeof google !== 'undefined') {
     initGoogleAuth();
+    // Auto-connect silently after short delay
     setTimeout(() => {
       if (gisClient && !window._gToken) {
         gisClient.requestAccessToken({prompt: ''});
