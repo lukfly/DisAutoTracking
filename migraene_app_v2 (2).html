@@ -294,6 +294,14 @@
     <div id="bp-morning-list"><div class="bp-empty">Keine Messungen für diesen Tag.</div></div>
   </div>
 
+  <div class="section">
+    <div class="section-title mc">Notizen</div>
+    <div class="field">
+      <label class="field-label">Morgen-Notizen</label>
+      <textarea class="text-input" id="morning-notes" rows="3" placeholder="Wie fühlst du dich heute Morgen? Besonderes beim Aufwachen?"></textarea>
+    </div>
+  </div>
+
   <button class="save-btn save-morning" onclick="saveMorning()">☀️ Morgen-Eintrag speichern</button>
 </div>
 
@@ -940,6 +948,7 @@ function loadMorning() {
   document.getElementById('sleep-duration-display').style.display='none';
   ['elvanse','betmiga','toviaz','carvedilol'].forEach(m=>document.getElementById('med-'+m).className='med-toggle on');
   document.getElementById('elvanse-dose').value='';
+  document.getElementById('morning-notes').value='';
 
   if(d.bedtime) { document.getElementById('bedtime').value=d.bedtime; }
   if(d.waketime) { document.getElementById('waketime').value=d.waketime; }
@@ -948,6 +957,7 @@ function loadMorning() {
   if(d.breakfastMissed) setSegVal('breakfastMissed', d.breakfastMissed);
   if(d.energyMorning !== undefined) setSegVal('energyMorning', d.energyMorning);
   if(d.elvanseDose) document.getElementById('elvanse-dose').value = d.elvanseDose;
+  if(d.notes) document.getElementById('morning-notes').value = d.notes;
   if(d.meds) {
     ['elvanse','betmiga','toviaz','carvedilol'].forEach(m => {
       if(d.meds[m]===false) document.getElementById('med-'+m).classList.remove('on');
@@ -1014,6 +1024,7 @@ function saveMorning() {
     breakfastMissed: getSegVal('breakfastMissed'),
     energyMorning: getSegVal('energyMorning'),
     elvanseDose: document.getElementById('elvanse-dose').value,
+    notes: document.getElementById('morning-notes').value,
     meds: {
       elvanse: document.getElementById('med-elvanse').classList.contains('on'),
       betmiga: document.getElementById('med-betmiga').classList.contains('on'),
@@ -1129,6 +1140,7 @@ function openModal(date,mor,eve,bp) {
       if(taken.length) html+=row('Regelmässige Medikamente',taken.join(', '));
       if(missed.length) html+=row('Nicht genommen',missed.join(', '),'color:var(--red)');
     }
+    if(mor.notes) html+=row('Morgen-Notizen',mor.notes);
   }
   if(Object.keys(eve).length) {
     html+='<div class="modal-section">🌙 Abend</div>';
@@ -1173,7 +1185,7 @@ function closeModal(e) { if(e.target===document.getElementById('modal-overlay'))
 
 // ── CSV EXPORT ───────────────────────────────────────────
 function exportCSV() {
-  const headers=['Datum','Wochentag','Bettzeit','Aufwachzeit','Schlafdauer (h)','Schlafqualität','Frühstück verpasst','Energy (morgens)',
+  const headers=['Datum','Wochentag','Bettzeit','Aufwachzeit','Schlafdauer (h)','Schlafqualität','Frühstück verpasst','Energy (morgens)','Morgen-Notizen',
     'Elvanse','Elvanse Dosis','Betmiga','Toviaz','Carvedilol',
     'Migräne-Tag','Schwindel','Kopfschmerzen','POTS-Zittrigkeit','Reizempfindlichkeit','Brain Fog/Fatigue','Intensität','Stimmung','Energy (abends)','Pinkeln',
     'Bewegung','Bewegung gut getan','Bildschirmzeit','Kaffee','Recherche/Grübeln',
@@ -1190,7 +1202,7 @@ function exportCSV() {
       const bpStr=bp.list?bp.list.map(x=>`${x.time}:${x.sys}/${x.dia}`).join('; '):'';
       rows.push([
         key,wd,
-        mor.bedtime||'',mor.waketime||'',mor.sleepDuration||'',mor.sleepQuality||'',mor.breakfastMissed||'',mor.energyMorning??'',
+        mor.bedtime||'',mor.waketime||'',mor.sleepDuration||'',mor.sleepQuality||'',mor.breakfastMissed||'',mor.energyMorning??'',(mor.notes||'').replace(/,/g,';'),
         mor.meds?.elvanse?'Ja':'Nein',mor.elvanseDose||'',
         mor.meds?.betmiga?'Ja':'Nein',mor.meds?.toviaz?'Ja':'Nein',mor.meds?.carvedilol?'Ja':'Nein',
         eve.migraineDay||'',eve.dizziness??'',eve.headache??'',eve.pots??'',eve.sensitivity??'',eve.brainFog??'',eve.dayIntensity??'',eve.mood??'',eve.energyEvening??'',eve.urination||'',
