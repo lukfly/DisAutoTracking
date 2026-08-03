@@ -572,7 +572,7 @@ function dateKey(d) {
 
 // ── GOOGLE DRIVE SYNC ────────────────────────────────────
 const DRIVE_FILE_NAME = 'migraine_diary_data.json';
-const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.appdata';
+const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 const CLIENT_ID = '799152036238-rgv5m6ng5ut359d52vepf34t4f1e3jud.apps.googleusercontent.com';
 const AUTHORIZED_ORIGIN = 'https://lukfly.github.io'; // GitHub Pages URL
 let gisClient = null;
@@ -623,7 +623,7 @@ function initGoogleAuth() {
   });
   const tokenClient = google.accounts.oauth2.initTokenClient({
     client_id: CLIENT_ID,
-    scope: 'https://www.googleapis.com/auth/drive.appdata',
+    scope: 'https://www.googleapis.com/auth/drive.file',
     callback: async (resp) => {
       if (resp.error) { setSyncStatus('error', 'Anmeldung fehlgeschlagen'); return; }
       window._gToken = resp.access_token;
@@ -648,7 +648,7 @@ function connectDrive() {
       return;
     }
   }
-  gisClient.requestAccessToken({prompt: 'consent'});
+  gisClient.requestAccessToken({prompt: 'select_account'});
 }
 
 // ── DRIVE: LOAD ──────────────────────────────────────────
@@ -656,7 +656,7 @@ async function loadFromDrive() {
   try {
     setSyncStatus('syncing', 'Lade Daten...');
     const searchRes = await fetch(
-      'https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=name%3D%22'+DRIVE_FILE_NAME+'%22&fields=files(id,name)',
+      'https://www.googleapis.com/drive/v3/files?q=name%3D%22'+DRIVE_FILE_NAME+'%22+and+trashed%3Dfalse&fields=files(id,name)',
       { headers: { Authorization: 'Bearer ' + window._gToken } }
     );
     const searchData = await searchRes.json();
@@ -668,7 +668,8 @@ async function loadFromDrive() {
       );
       const driveData = await fileRes.json();
 
-      // Smart merge: compare savedAt timestamps, newest wins
+      // Smart merge: Drive wins for keys only in Drive,
+      // for conflicts newest savedAt wins
       Object.entries(driveData).forEach(([k, driveVal]) => {
         const localVal = memCache[k];
         if (!localVal) {
@@ -676,14 +677,19 @@ async function loadFromDrive() {
           memCache[k] = driveVal;
           saveLocal(k, driveVal);
         } else {
-          // Both exist → compare savedAt, newest wins
-          const driveTime = driveVal.savedAt || '';
-          const localTime = localVal.savedAt || '';
-          if (driveTime > localTime) {
+          // Both exist → newest wins
+          const driveTime = driveVal.savedAt || '0';
+          const localTime = localVal.savedAt || '0';
+          if (driveTime >= localTime) {
             memCache[k] = driveVal;
             saveLocal(k, driveVal);
           }
-          // else local is newer, keep local
+        }
+      });
+      // Also check local keys not in Drive → keep them (they'll be pushed to Drive)
+      Object.entries(memCache).forEach(([k, localVal]) => {
+        if (!driveData[k]) {
+          // Only local → will be synced to Drive via syncToDrive below
         }
       });
 
@@ -707,13 +713,15 @@ async function loadFromDrive() {
   }
 }
 
-// ── DRIVE: SAVE ──────────────────────────────────────────
 async function syncToDrive() {
-  if (!window._gToken) return; // Not connected, localStorage only
+  if (!window._gToken) {
+    setSyncStatus('local', 'Nicht verbunden — lokal gespeichert');
+    return;
+  }
   try {
     setSyncStatus('syncing', 'Speichere...');
     const content = JSON.stringify(memCache);
-    const metadata = { name: DRIVE_FILE_NAME, parents: ['appDataFolder'] };
+    const metadata = { name: DRIVE_FILE_NAME };
     let url, method;
     if (driveFileId) {
       url = 'https://www.googleapis.com/upload/drive/v3/files/' + driveFileId + '?uploadType=multipart';
@@ -732,6 +740,14 @@ async function syncToDrive() {
       },
       body
     });
+    if (res.status === 401 || res.status === 403) {
+      // Token expired or invalid — reset and ask user to reconnect
+      window._gToken = null;
+      driveFileId = null;
+      setSyncStatus('error', 'Token abgelaufen — bitte neu verbinden');
+      document.getElementById('sync-connect-btn').style.display = 'inline-block';
+      return;
+    }
     const result = await res.json();
     if (result.id) driveFileId = result.id;
     setSyncStatus('ok', 'Drive synchronisiert ✓');
