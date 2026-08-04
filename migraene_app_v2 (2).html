@@ -679,21 +679,24 @@ const WEATHER_LAT=47.4667, WEATHER_LON=8.3167;
 async function loadWeather() {
   const key=dateKey(currentDate);
   const cached=load('wx_'+key);
-  if(cached&&cached.temp!==undefined){renderWeather(cached);return;}
+  if(cached&&cached.tempMax!==undefined){renderWeather(cached);return;}
   try {
     document.getElementById('weather-info').textContent='Lädt...';
-    const url=`https://api.open-meteo.com/v1/forecast?latitude=${WEATHER_LAT}&longitude=${WEATHER_LON}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,weathercode&timezone=Europe/Zurich&start_date=${key}&end_date=${key}`;
-    // Also get hourly pressure
-    const urlH=`https://api.open-meteo.com/v1/forecast?latitude=${WEATHER_LAT}&longitude=${WEATHER_LON}&hourly=surface_pressure&timezone=Europe/Zurich&start_date=${key}&end_date=${key}`;
-    const [r1,r2]=await Promise.all([fetch(url),fetch(urlH)]);
-    const [d1,d2]=await Promise.all([r1.json(),r2.json()]);
-    const pressures=d2.hourly?.surface_pressure||[];
+    const today=dateKey(new Date());
+    const isPast=key<today;
+    // Use archive API for past dates, forecast for today/future
+    const baseUrl=isPast
+      ?`https://archive-api.open-meteo.com/v1/archive?latitude=${WEATHER_LAT}&longitude=${WEATHER_LON}&start_date=${key}&end_date=${key}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,weathercode&hourly=surface_pressure&timezone=Europe/Zurich`
+      :`https://api.open-meteo.com/v1/forecast?latitude=${WEATHER_LAT}&longitude=${WEATHER_LON}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,weathercode&hourly=surface_pressure&timezone=Europe/Zurich&start_date=${key}&end_date=${key}`;
+    const r=await fetch(baseUrl);
+    const d=await r.json();
+    const pressures=d.hourly?.surface_pressure||[];
     const avgPressure=pressures.length?Math.round(pressures.reduce((a,b)=>a+b,0)/pressures.length):null;
     const wx={
-      tempMax:d1.daily?.temperature_2m_max?.[0],
-      tempMin:d1.daily?.temperature_2m_min?.[0],
-      precip:d1.daily?.precipitation_sum?.[0],
-      code:d1.daily?.weathercode?.[0],
+      tempMax:d.daily?.temperature_2m_max?.[0]!==undefined?Math.round(d.daily.temperature_2m_max[0]*10)/10:null,
+      tempMin:d.daily?.temperature_2m_min?.[0]!==undefined?Math.round(d.daily.temperature_2m_min[0]*10)/10:null,
+      precip:d.daily?.precipitation_sum?.[0]!==undefined?Math.round(d.daily.precipitation_sum[0]*10)/10:null,
+      code:d.daily?.weathercode?.[0],
       pressure:avgPressure,
       savedAt:new Date().toISOString()
     };
@@ -701,6 +704,7 @@ async function loadWeather() {
     renderWeather(wx);
   } catch(e) {
     document.getElementById('weather-info').textContent='Fehler beim Laden';
+    console.error(e);
   }
 }
 
@@ -718,7 +722,7 @@ function wxCodeToIcon(code) {
 function renderWeather(wx) {
   const bar=document.getElementById('weather-bar');
   const icon=wxCodeToIcon(wx.code||0);
-  const pressureAlert=wx.pressure&&(wx.pressure<1000||wx.pressure>1025);
+  const pressureAlert=wx.pressure&&(wx.pressure<980||wx.pressure>1030);
   bar.innerHTML=`
     <div>
       <div style="font-size:16px;">${icon} ${wx.tempMin??'?'}–${wx.tempMax??'?'}°C</div>
@@ -796,19 +800,40 @@ function toggleSym(btn){btn.classList.toggle('sel');updateIntensityVisibility();
 function toggleOther(btn){const f=document.getElementById('other-symptom');f.style.display=btn.classList.contains('sel')?'block':'none';}
 function updateIntensityVisibility(){const any=document.querySelectorAll('.sym-btn.sel').length>0;document.getElementById('intensity-field').style.display=any?'block':'none';}
 
-function openEventForm(){
+let editingEventId = null;
+
+function openEventForm(editId=null){
+  editingEventId=editId;
   const form=document.getElementById('event-form');
   form.classList.add('open');
-  // Set current time
-  const now=new Date();
-  document.getElementById('event-time').value=`${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
-  // Reset form
   document.querySelectorAll('.sym-btn').forEach(b=>b.classList.remove('sel'));
   document.getElementById('other-symptom').style.display='none';
   document.getElementById('other-symptom').value='';
   document.getElementById('intensity-field').style.display='none';
   document.querySelectorAll('[data-f="eventIntensity"]').forEach(b=>b.classList.remove('sel-ev'));
   document.getElementById('event-context').value='';
+  document.getElementById('event-type-field') && document.querySelectorAll('[data-f="eventType"]').forEach(b=>b.classList.remove('sel-m','sel-e','sel-ev','sel-g','sel-r'));
+
+  if(editId){
+    // Load existing event data
+    const evData=load(evKey(currentDate));
+    const ev=(evData.events||[]).find(e=>e.id===editId);
+    if(ev){
+      document.getElementById('event-time').value=ev.time||'';
+      document.getElementById('event-context').value=ev.context||'';
+      if(ev.intensity!==null&&ev.intensity!==undefined) setV('eventIntensity',ev.intensity);
+      (ev.symptoms||[]).forEach(sym=>{
+        const btn=document.querySelector(`.sym-btn[data-sym="${sym}"]`);
+        if(btn) btn.classList.add('sel');
+      });
+      updateIntensityVisibility();
+    }
+    document.querySelector('.save-event').textContent='✏️ Aktualisieren';
+  } else {
+    const now=new Date();
+    document.getElementById('event-time').value=`${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+    document.querySelector('.save-event').textContent='Speichern';
+  }
   form.scrollIntoView({behavior:'smooth'});
 }
 
@@ -823,12 +848,19 @@ function saveEvent(){
   const context=document.getElementById('event-context').value.trim();
   if(syms.length===0&&!context){showToast('Bitte mindestens ein Symptom oder Kontext eingeben');return;}
   const evData=load(evKey(currentDate));
-  const events=evData.events||[];
-  events.push({time,symptoms:syms,intensity,context,id:Date.now(),savedAt:new Date().toISOString()});
+  let events=evData.events||[];
+  if(editingEventId){
+    // Update existing
+    events=events.map(e=>e.id===editingEventId?{...e,time,symptoms:syms,intensity,context,savedAt:new Date().toISOString()}:e);
+    showToast('✏️ Ereignis aktualisiert!');
+  } else {
+    events.push({time,symptoms:syms,intensity,context,id:Date.now(),savedAt:new Date().toISOString()});
+    showToast('⚡ Ereignis gespeichert!');
+  }
   save(evKey(currentDate),{events,savedAt:new Date().toISOString()});
+  editingEventId=null;
   closeEventForm();
   renderEventList();
-  showToast('⚡ Ereignis gespeichert!');
 }
 
 function deleteEvent(id){
@@ -846,7 +878,10 @@ function renderEventList(){
   if(events.length===0){container.innerHTML='<div style="color:var(--text-dim);font-size:14px;text-align:center;padding:20px 0;font-style:italic;">Noch keine Ereignisse für diesen Tag.<br>Tippe auf + Neues Ereignis wenn etwas passiert.</div>';return;}
   container.innerHTML=events.map(e=>`
     <div class="event-card">
-      <button class="event-delete" onclick="deleteEvent(${e.id})">✕</button>
+      <div style="position:absolute;top:10px;right:10px;display:flex;gap:6px;">
+        <button onclick="openEventForm(${e.id})" style="background:var(--bg3);border:1px solid var(--border);color:var(--text-dim);padding:4px 8px;border-radius:6px;cursor:pointer;font-size:12px;">✏️</button>
+        <button onclick="deleteEvent(${e.id})" style="background:var(--bg3);border:1px solid var(--border);color:var(--text-dim);padding:4px 8px;border-radius:6px;cursor:pointer;font-size:12px;">✕</button>
+      </div>
       <div class="event-card-time">⏱ ${e.time}${e.intensity!==null&&e.intensity!==undefined?' · Stärke '+e.intensity+'/4':''}</div>
       <div class="event-card-symptoms">${(e.symptoms||[]).map(s=>`<span class="symptom-badge">${s}</span>`).join('')}</div>
       ${e.context?`<div class="event-card-text">${e.context}</div>`:''}
@@ -859,30 +894,55 @@ let recognition=null;
 function startDictation(){
   const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
   if(!SpeechRecognition){showToast('Diktierfunktion nicht verfügbar in diesem Browser');return;}
-  if(recognition&&recognition.active){recognition.stop();return;}
-  recognition=new SpeechRecognition();
-  recognition.lang='de-DE';
-  recognition.continuous=false;
-  recognition.interimResults=false;
   const btn=document.getElementById('dictate-btn');
   const status=document.getElementById('dictate-status');
-  btn.classList.add('recording');
-  btn.textContent='🔴 Stop';
-  status.textContent='Sprich jetzt...';
-  recognition.active=true;
-  recognition.onresult=(e)=>{
-    const text=e.results[0][0].transcript;
-    document.getElementById('event-context').value+=text+' ';
-    // Auto-detect symptoms from speech
-    detectSymptomsFromText(text);
-    status.textContent='✓ '+text.substring(0,40)+'...';
-  };
-  recognition.onerror=()=>{status.textContent='Fehler beim Diktieren';};
-  recognition.onend=()=>{
+  // Stop if already recording
+  if(recognition&&recognition._active){
+    recognition.stop();
+    recognition._active=false;
     btn.classList.remove('recording');
     btn.textContent='🎤 Diktieren';
-    recognition.active=false;
-    setTimeout(()=>{status.textContent='';},3000);
+    status.textContent='';
+    return;
+  }
+  recognition=new SpeechRecognition();
+  recognition.lang='de-DE';
+  recognition.continuous=true;  // Stay active until manually stopped
+  recognition.interimResults=true;
+  recognition._active=true;
+  btn.classList.add('recording');
+  btn.textContent='🔴 Stop';
+  status.textContent='Sprich jetzt — tippe Stop wenn fertig';
+  let finalText='';
+  recognition.onresult=(e)=>{
+    let interim='';
+    for(let i=e.resultIndex;i<e.results.length;i++){
+      if(e.results[i].isFinal){
+        finalText+=e.results[i][0].transcript+' ';
+        detectSymptomsFromText(e.results[i][0].transcript);
+      } else {
+        interim=e.results[i][0].transcript;
+      }
+    }
+    document.getElementById('event-context').value=finalText+interim;
+    status.textContent='🎤 '+finalText.substring(Math.max(0,finalText.length-40));
+  };
+  recognition.onerror=(e)=>{
+    if(e.error!=='aborted'){status.textContent='Fehler: '+e.error;}
+  };
+  recognition.onend=()=>{
+    // Auto-restart if still active (handles browser timeouts)
+    if(recognition._active){
+      try{recognition.start();}catch(err){
+        recognition._active=false;
+        btn.classList.remove('recording');
+        btn.textContent='🎤 Diktieren';
+      }
+    } else {
+      btn.classList.remove('recording');
+      btn.textContent='🎤 Diktieren';
+      setTimeout(()=>{status.textContent='';},3000);
+    }
   };
   recognition.start();
 }
