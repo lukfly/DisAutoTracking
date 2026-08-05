@@ -447,6 +447,8 @@ body { background:var(--bg); color:var(--text); font-family:-apple-system,BlinkM
         <button class="seg-btn" data-f="emotionalEvent" data-v="Nein" onclick="pick(this,'e')">Nein</button>
       </div>
     </div>
+    <div class="field">
+      <label class="field-label">Kaffee (Tassen)</label>
       <div class="segment s5">
         <button class="seg-btn" data-f="coffee" data-v="0" onclick="pick(this,'e')">0</button>
         <button class="seg-btn" data-f="coffee" data-v="1" onclick="pick(this,'e')">1</button>
@@ -759,8 +761,6 @@ async function loadAllWeather() {
     console.error(e);
   }
 }
-
-function wxCodeToIcon(code) {
   if(code===0) return '☀️';
   if(code<=3) return '⛅';
   if(code<=48) return '🌫️';
@@ -949,6 +949,7 @@ function startDictation(){
   if(!SpeechRecognition){showToast('Diktierfunktion nicht verfügbar in diesem Browser');return;}
   const btn=document.getElementById('dictate-btn');
   const status=document.getElementById('dictate-status');
+  const textArea=document.getElementById('event-context');
   // Stop if already recording
   if(recognition&&recognition._active){
     recognition.stop();
@@ -960,31 +961,35 @@ function startDictation(){
   }
   recognition=new SpeechRecognition();
   recognition.lang='de-DE';
-  recognition.continuous=true;  // Stay active until manually stopped
+  recognition.continuous=true;
   recognition.interimResults=true;
   recognition._active=true;
+  // Remember text that was already in the field before dictation started
+  const existingText=textArea.value;
   btn.classList.add('recording');
   btn.textContent='🔴 Stop';
   status.textContent='Sprich jetzt — tippe Stop wenn fertig';
-  let finalText='';
   recognition.onresult=(e)=>{
-    let interim='';
-    for(let i=e.resultIndex;i<e.results.length;i++){
+    // Build transcript cleanly from all results from index 0
+    let finalTranscript='';
+    let interimTranscript='';
+    for(let i=0;i<e.results.length;i++){
       if(e.results[i].isFinal){
-        finalText+=e.results[i][0].transcript+' ';
-        detectSymptomsFromText(e.results[i][0].transcript);
+        finalTranscript+=e.results[i][0].transcript+' ';
       } else {
-        interim=e.results[i][0].transcript;
+        interimTranscript+=e.results[i][0].transcript;
       }
     }
-    document.getElementById('event-context').value=finalText+interim;
-    status.textContent='🎤 '+finalText.substring(Math.max(0,finalText.length-40));
+    // Combine existing text + new final + interim (no duplication)
+    textArea.value=existingText+(existingText&&finalTranscript?' ':'')+finalTranscript+interimTranscript;
+    // Auto-detect symptoms from final parts only
+    if(finalTranscript) detectSymptomsFromText(finalTranscript);
+    status.textContent='🎤 '+finalTranscript.substring(Math.max(0,finalTranscript.length-50));
   };
   recognition.onerror=(e)=>{
     if(e.error!=='aborted'){status.textContent='Fehler: '+e.error;}
   };
   recognition.onend=()=>{
-    // Auto-restart if still active (handles browser timeouts)
     if(recognition._active){
       try{recognition.start();}catch(err){
         recognition._active=false;
