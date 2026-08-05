@@ -1,0 +1,1281 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Migräne Tagebuch</title>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+* { box-sizing:border-box; margin:0; padding:0; }
+:root {
+  --bg:#1a1f3a; --bg2:#242952; --bg3:#2e3560;
+  --text:#e8e4f0; --text-dim:#9b96b0;
+  --morning:#f0a500; --morning-soft:rgba(240,165,0,0.15);
+  --evening:#6b9bd2; --evening-soft:rgba(107,155,210,0.15);
+  --event:#a78bfa; --event-soft:rgba(167,139,250,0.15);
+  --migraine:#e8a0a0; --migraine-soft:rgba(232,160,160,0.15);
+  --green:#7bc67e; --green-soft:rgba(123,198,126,0.15);
+  --red:#e05555; --red-soft:rgba(224,85,85,0.15);
+  --border:rgba(255,255,255,0.08); --radius:14px; --radius-sm:8px;
+}
+body { background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; font-size:16px; min-height:100vh; padding-bottom:120px; }
+
+/* HEADER */
+.header { background:var(--bg2); border-bottom:1px solid var(--border); padding:12px 16px; position:sticky; top:0; z-index:100; }
+.header-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+.app-title { font-size:17px; font-weight:700; }
+.today-btn { background:var(--bg3); border:1px solid var(--border); color:var(--text-dim); font-size:11px; padding:4px 10px; border-radius:20px; cursor:pointer; text-transform:uppercase; }
+.sync-bar { display:flex; align-items:center; justify-content:space-between; padding:6px 10px; background:var(--bg3); border-radius:var(--radius-sm); margin-bottom:10px; font-size:12px; }
+.sync-status { display:flex; align-items:center; gap:6px; color:var(--text-dim); }
+.sync-dot { width:8px; height:8px; border-radius:50%; background:var(--text-dim); flex-shrink:0; }
+.sync-dot.ok { background:var(--green); }
+.sync-dot.syncing { background:var(--morning); animation:pulse 1s infinite; }
+.sync-dot.error { background:var(--red); }
+@keyframes pulse { 0%,100%{opacity:1}50%{opacity:0.3} }
+.sync-btn { background:var(--morning-soft); border:1px solid var(--morning); color:var(--morning); padding:4px 10px; border-radius:20px; cursor:pointer; font-size:11px; font-weight:700; }
+.date-nav { display:flex; align-items:center; gap:10px; justify-content:center; margin-bottom:10px; }
+.date-nav button { background:var(--bg3); border:1px solid var(--border); color:var(--text); width:30px; height:30px; border-radius:50%; cursor:pointer; font-size:15px; display:flex; align-items:center; justify-content:center; }
+.date-label { font-size:14px; font-weight:600; color:var(--text-dim); min-width:130px; text-align:center; }
+.tabs { display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:6px; }
+.tab-btn { background:var(--bg3); border:2px solid transparent; color:var(--text-dim); padding:8px 2px; border-radius:var(--radius-sm); cursor:pointer; font-size:11px; font-weight:600; display:flex; flex-direction:column; align-items:center; gap:3px; transition:all 0.18s; }
+.tab-btn .ti { font-size:18px; }
+.tab-btn.active-morning { border-color:var(--morning); color:var(--morning); background:var(--morning-soft); }
+.tab-btn.active-event { border-color:var(--event); color:var(--event); background:var(--event-soft); }
+.tab-btn.active-evening { border-color:var(--evening); color:var(--evening); background:var(--evening-soft); }
+.tab-btn.active-calendar { border-color:var(--migraine); color:var(--migraine); background:var(--migraine-soft); }
+
+/* VIEWS */
+.view { display:none !important; padding:16px; }
+.view.active { display:block !important; }
+
+/* SECTION */
+.section { background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); padding:16px; margin-bottom:12px; }
+.section-title { font-size:11px; font-weight:700; letter-spacing:1.2px; text-transform:uppercase; color:var(--text-dim); margin-bottom:14px; }
+.section-title.mc { color:var(--morning); }
+.section-title.ec { color:var(--evening); }
+.section-title.evc { color:var(--event); }
+
+/* FIELD */
+.field { margin-bottom:14px; }
+.field:last-child { margin-bottom:0; }
+.field-label { font-size:13px; font-weight:600; color:var(--text-dim); margin-bottom:7px; display:block; }
+.field-hint { font-size:11px; color:var(--text-dim); font-style:italic; margin-bottom:7px; }
+
+/* SEGMENT */
+.segment { display:grid; gap:5px; }
+.segment.s2 { grid-template-columns:1fr 1fr; }
+.segment.s3 { grid-template-columns:1fr 1fr 1fr; }
+.segment.s4 { grid-template-columns:1fr 1fr 1fr 1fr; }
+.segment.s5 { grid-template-columns:1fr 1fr 1fr 1fr 1fr; }
+.seg-btn { background:var(--bg3); border:1.5px solid var(--border); color:var(--text-dim); padding:9px 4px; border-radius:var(--radius-sm); cursor:pointer; font-size:13px; font-weight:600; text-align:center; transition:all 0.15s; line-height:1.3; }
+.seg-btn.sel-m { background:var(--morning-soft); border-color:var(--morning); color:var(--morning); }
+.seg-btn.sel-e { background:var(--evening-soft); border-color:var(--evening); color:var(--evening); }
+.seg-btn.sel-ev { background:var(--event-soft); border-color:var(--event); color:var(--event); }
+.seg-btn.sel-g { background:var(--green-soft); border-color:var(--green); color:var(--green); }
+.seg-btn.sel-r { background:var(--red-soft); border-color:var(--red); color:var(--red); }
+
+/* SLEEP TIME */
+.sleep-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px; }
+.sleep-time-block { display:flex; flex-direction:column; gap:5px; }
+.sleep-time-block label { font-size:12px; font-weight:600; color:var(--text-dim); }
+.sleep-time-input { background:var(--bg3); border:1.5px solid var(--border); color:var(--text); padding:10px; border-radius:var(--radius-sm); font-size:18px; font-weight:700; text-align:center; width:100%; }
+.sleep-time-input:focus { outline:none; border-color:var(--morning); }
+.sleep-dur { background:var(--morning-soft); border:1px solid var(--morning); border-radius:var(--radius-sm); padding:8px; text-align:center; font-size:14px; color:var(--morning); font-weight:700; margin-top:4px; display:none; }
+
+/* MED TOGGLES */
+.med-item { display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--border); }
+.med-item:last-child { border-bottom:none; }
+.med-name { font-size:15px; font-weight:500; }
+.med-right { display:flex; align-items:center; gap:8px; }
+.med-dose { background:var(--bg3); border:1px solid var(--border); color:var(--text); padding:5px 8px; border-radius:var(--radius-sm); font-size:13px; width:90px; text-align:center; }
+.med-toggle { width:48px; height:26px; background:var(--bg3); border:1.5px solid var(--border); border-radius:30px; cursor:pointer; position:relative; transition:all 0.2s; flex-shrink:0; }
+.med-toggle::after { content:''; position:absolute; top:3px; left:3px; width:16px; height:16px; background:var(--text-dim); border-radius:50%; transition:all 0.2s; }
+.med-toggle.on { background:var(--green-soft); border-color:var(--green); }
+.med-toggle.on::after { left:23px; background:var(--green); }
+
+/* ACUTE MEDS */
+.acute-med { display:flex; align-items:center; gap:8px; padding:9px 0; border-bottom:1px solid var(--border); }
+.acute-med:last-child { border-bottom:none; }
+.acute-cb { width:26px; height:26px; background:var(--bg3); border:1.5px solid var(--border); border-radius:6px; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:15px; flex-shrink:0; transition:all 0.15s; }
+.acute-cb.checked { background:var(--evening-soft); border-color:var(--evening); }
+.acute-name { font-size:15px; flex:1; }
+.acute-dose { background:var(--bg3); border:1px solid var(--border); color:var(--text); padding:5px 8px; border-radius:var(--radius-sm); font-size:13px; width:100px; text-align:center; }
+
+/* TEXT INPUT */
+.txt { width:100%; background:var(--bg3); border:1px solid var(--border); color:var(--text); padding:10px 12px; border-radius:var(--radius-sm); font-size:15px; resize:none; font-family:inherit; }
+.txt:focus { outline:none; border-color:var(--evening); }
+
+/* SAVE BTN */
+.save-btn { width:100%; padding:14px; border-radius:var(--radius); border:none; font-size:16px; font-weight:700; cursor:pointer; margin-top:8px; }
+.save-morning { background:var(--morning); color:#1a1f3a; }
+.save-evening { background:var(--evening); color:#1a1f3a; }
+.save-event { background:var(--event); color:#1a1f3a; }
+
+/* TOAST */
+.toast { position:fixed; bottom:110px; left:50%; transform:translateX(-50%); background:var(--green); color:#1a1f3a; padding:10px 22px; border-radius:30px; font-weight:700; font-size:14px; opacity:0; transition:opacity 0.3s; pointer-events:none; z-index:999; white-space:nowrap; }
+.toast.show { opacity:1; }
+
+/* EVENT TAB */
+.event-list { margin-bottom:14px; }
+.event-card { background:var(--bg2); border:1px solid var(--event); border-radius:var(--radius); padding:14px; margin-bottom:10px; position:relative; }
+.event-card-time { font-size:12px; color:var(--event); font-weight:700; margin-bottom:6px; }
+.event-card-symptoms { display:flex; flex-wrap:wrap; gap:5px; margin-bottom:6px; }
+.symptom-badge { background:var(--event-soft); border:1px solid var(--event); color:var(--event); padding:3px 8px; border-radius:12px; font-size:11px; font-weight:700; }
+.event-card-text { font-size:13px; color:var(--text-dim); }
+.event-delete { position:absolute; top:10px; right:10px; background:none; border:none; color:var(--text-dim); cursor:pointer; font-size:18px; padding:4px; }
+.add-event-btn { width:100%; padding:14px; border-radius:var(--radius); border:2px dashed var(--event); background:var(--event-soft); color:var(--event); font-size:16px; font-weight:700; cursor:pointer; margin-bottom:14px; }
+
+/* EVENT FORM */
+.event-form { background:var(--bg2); border:2px solid var(--event); border-radius:var(--radius); padding:16px; margin-bottom:14px; display:none; }
+.event-form.open { display:block; }
+.symptom-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-bottom:12px; }
+.sym-btn { background:var(--bg3); border:1.5px solid var(--border); color:var(--text-dim); padding:8px 4px; border-radius:var(--radius-sm); cursor:pointer; font-size:12px; font-weight:600; text-align:center; transition:all 0.15s; }
+.sym-btn.sel { background:var(--event-soft); border-color:var(--event); color:var(--event); }
+.intensity-row { display:flex; align-items:center; gap:8px; margin-bottom:10px; }
+.intensity-label { font-size:12px; color:var(--text-dim); min-width:100px; }
+
+/* DICTATE BTN */
+.dictate-row { display:flex; gap:8px; margin-bottom:10px; }
+.dictate-btn { background:var(--bg3); border:1.5px solid var(--border); color:var(--text-dim); padding:10px 14px; border-radius:var(--radius-sm); cursor:pointer; font-size:14px; font-weight:600; display:flex; align-items:center; gap:6px; white-space:nowrap; }
+.dictate-btn.recording { background:var(--red-soft); border-color:var(--red); color:var(--red); animation:pulse 1s infinite; }
+
+/* WETTER */
+.weather-bar { background:var(--bg3); border-radius:var(--radius-sm); padding:10px 14px; margin-bottom:12px; display:flex; align-items:center; justify-content:space-between; font-size:13px; }
+.weather-info { color:var(--text-dim); }
+.weather-alert { color:var(--red); font-weight:700; }
+.weather-load-btn { background:none; border:1px solid var(--border); color:var(--text-dim); padding:4px 10px; border-radius:12px; cursor:pointer; font-size:11px; }
+
+/* CALENDAR */
+.cal-legend { background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); padding:12px 16px; margin-bottom:14px; display:flex; flex-wrap:wrap; gap:8px 14px; }
+.legend-item { display:flex; align-items:center; gap:5px; font-size:11px; color:var(--text-dim); }
+.legend-dot { width:11px; height:11px; border-radius:3px; flex-shrink:0; }
+.cal-month { background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); padding:14px; margin-bottom:12px; }
+.cal-month-title { font-size:14px; font-weight:700; margin-bottom:10px; color:var(--migraine); }
+.cal-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:3px; }
+.cal-wd { text-align:center; font-size:9px; font-weight:700; color:var(--text-dim); padding:3px 0; }
+.cal-day { aspect-ratio:1; border-radius:7px; display:flex; flex-direction:column; align-items:center; justify-content:center; font-size:11px; font-weight:500; cursor:pointer; background:var(--bg3); border:1.5px solid transparent; min-height:34px; position:relative; }
+.cal-day.empty { background:transparent; cursor:default; }
+.cal-day.today { border-color:var(--text-dim) !important; }
+.cal-day.migraine { background:#c0392b; }
+.cal-day.strong-diz { border-color:#e8a0a0 !important; border-width:2px !important; }
+.cal-day.bad-sleep { outline:2px solid var(--evening); outline-offset:1px; }
+.cal-day.high-bp { background:rgba(224,85,85,0.25); }
+.day-num { font-size:10px; line-height:1; }
+.day-badges { display:flex; gap:1px; flex-wrap:wrap; justify-content:center; margin-top:2px; }
+.badge { font-size:7px; font-weight:800; color:rgba(255,255,255,0.85); }
+.no-adhs-dot { position:absolute; top:2px; right:3px; width:5px; height:5px; background:var(--red); border-radius:50%; }
+.has-events-dot { position:absolute; top:2px; left:3px; width:5px; height:5px; background:var(--event); border-radius:50%; }
+
+/* MODAL */
+.modal-overlay { display:none; position:fixed; inset:0; background:rgba(10,12,30,0.85); z-index:200; align-items:flex-end; justify-content:center; }
+.modal-overlay.open { display:flex; }
+.modal { background:var(--bg2); border-radius:var(--radius) var(--radius) 0 0; width:100%; max-width:500px; max-height:82vh; overflow-y:auto; padding:20px; border-top:1px solid var(--border); }
+.modal-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
+.modal-title { font-size:16px; font-weight:700; }
+.modal-close { background:var(--bg3); border:none; color:var(--text-dim); width:30px; height:30px; border-radius:50%; cursor:pointer; font-size:18px; display:flex; align-items:center; justify-content:center; }
+.modal-sec { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--text-dim); margin:12px 0 8px; }
+.modal-row { display:flex; justify-content:space-between; padding:7px 0; border-bottom:1px solid var(--border); font-size:13px; }
+.modal-row:last-child { border-bottom:none; }
+.modal-row-label { color:var(--text-dim); }
+.modal-row-value { font-weight:600; text-align:right; max-width:60%; }
+
+/* BP */
+.bp-entry { background:var(--bg3); border-radius:var(--radius-sm); padding:9px 12px; margin-bottom:7px; display:flex; justify-content:space-between; align-items:center; font-size:13px; }
+.bp-val { font-weight:700; font-size:15px; }
+.bp-val.high { color:var(--red); }
+.bp-time { color:var(--text-dim); font-size:11px; }
+.bp-empty { color:var(--text-dim); font-size:13px; font-style:italic; text-align:center; padding:10px 0; }
+
+/* SUNDAY BANNER */
+.sunday-banner { background:linear-gradient(135deg,var(--morning-soft),rgba(240,165,0,0.25)); border:1.5px solid var(--morning); border-radius:var(--radius); padding:14px; margin-bottom:14px; display:none; }
+.sunday-banner-title { font-size:14px; font-weight:700; color:var(--morning); margin-bottom:4px; }
+.sunday-export-btn { width:100%; padding:10px; border-radius:var(--radius-sm); border:none; background:var(--morning); color:#1a1f3a; font-size:14px; font-weight:700; cursor:pointer; margin-top:8px; }
+
+@media (max-width:380px) {
+  .cal-day { min-height:28px; }
+  .symptom-grid { grid-template-columns:repeat(2,1fr); }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-top">
+    <div class="app-title">Migräne Tagebuch</div>
+    <button class="today-btn" onclick="goToday()">Heute</button>
+  </div>
+  <div class="sync-bar">
+    <div class="sync-status">
+      <div class="sync-dot" id="sync-dot"></div>
+      <span id="sync-label">Nur lokal</span>
+    </div>
+    <button class="sync-btn" onclick="connectDrive()" id="sync-connect-btn">☁️ Drive verbinden</button>
+  </div>
+  <div class="date-nav">
+    <button onclick="changeDay(-1)">‹</button>
+    <div class="date-label" id="dateLabel"></div>
+    <button onclick="changeDay(1)">›</button>
+  </div>
+  <div class="tabs">
+    <button class="tab-btn" id="tab-morning" onclick="switchTab('morning')"><span class="ti">☀️</span>Morgen</button>
+    <button class="tab-btn" id="tab-event" onclick="switchTab('event')"><span class="ti">⚡</span>Ereignis</button>
+    <button class="tab-btn" id="tab-evening" onclick="switchTab('evening')"><span class="ti">🌙</span>Abend</button>
+    <button class="tab-btn" id="tab-calendar" onclick="switchTab('calendar')"><span class="ti">📅</span>Kalender</button>
+  </div>
+</div>
+
+<!-- ===== MORGEN ===== -->
+<div class="view" id="view-morning">
+  <div class="section">
+    <div class="section-title mc">Schlaf</div>
+    <div class="field">
+      <div class="sleep-row">
+        <div class="sleep-time-block">
+          <label>🌙 Bettzeit</label>
+          <input type="time" class="sleep-time-input" id="bedtime" onchange="calcSleep()">
+        </div>
+        <div class="sleep-time-block">
+          <label>☀️ Aufwachzeit</label>
+          <input type="time" class="sleep-time-input" id="waketime" onchange="calcSleep()">
+        </div>
+      </div>
+      <div class="sleep-dur" id="sleep-dur"></div>
+    </div>
+    <div class="field">
+      <label class="field-label">Schlafqualität</label>
+      <div class="segment s3">
+        <button class="seg-btn" data-f="sleepQ" data-v="Gut" onclick="pick(this,'m')">😴 Gut</button>
+        <button class="seg-btn" data-f="sleepQ" data-v="Mittel" onclick="pick(this,'m')">😐 Mittel</button>
+        <button class="seg-btn" data-f="sleepQ" data-v="Schlecht" onclick="pick(this,'m')">😫 Schlecht</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title mc">Energie & Wohlbefinden</div>
+    <div class="field">
+      <label class="field-label">Energy Level beim Aufwachen (0–4)</label>
+      <div class="segment s5">
+        <button class="seg-btn" data-f="energyM" data-v="0" onclick="pick(this,'m')">0<br><span style="font-size:9px">leer</span></button>
+        <button class="seg-btn" data-f="energyM" data-v="1" onclick="pick(this,'m')">1<br><span style="font-size:9px">wenig</span></button>
+        <button class="seg-btn" data-f="energyM" data-v="2" onclick="pick(this,'m')">2<br><span style="font-size:9px">ok</span></button>
+        <button class="seg-btn" data-f="energyM" data-v="3" onclick="pick(this,'m')">3<br><span style="font-size:9px">gut</span></button>
+        <button class="seg-btn" data-f="energyM" data-v="4" onclick="pick(this,'m')">4<br><span style="font-size:9px">top</span></button>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title mc">Alltag</div>
+    <div class="field">
+      <label class="field-label">Frühstück verpasst</label>
+      <div class="segment s2">
+        <button class="seg-btn" data-f="breakfastMissed" data-v="Ja" onclick="pick(this,'m')">Ja</button>
+        <button class="seg-btn" data-f="breakfastMissed" data-v="Nein" onclick="pick(this,'m')">Nein</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title mc">Regelmässige Medikamente</div>
+    <p style="font-size:12px;color:var(--text-dim);margin-bottom:12px;">Alle standardmässig als genommen — deaktivieren wenn nicht genommen.</p>
+    <div class="med-item">
+      <div><div class="med-name">Elvanse</div></div>
+      <div class="med-right">
+        <input class="med-dose" id="elvanse-dose" placeholder="z.B. 30mg">
+        <div class="med-toggle on" id="med-elvanse" onclick="toggleMed(this)"></div>
+      </div>
+    </div>
+    <div class="med-item">
+      <div class="med-name">Betmiga</div>
+      <div class="med-right"><div class="med-toggle on" id="med-betmiga" onclick="toggleMed(this)"></div></div>
+    </div>
+    <div class="med-item">
+      <div class="med-name">Toviaz</div>
+      <div class="med-right"><div class="med-toggle on" id="med-toviaz" onclick="toggleMed(this)"></div></div>
+    </div>
+    <div class="med-item">
+      <div class="med-name">Carvedilol</div>
+      <div class="med-right"><div class="med-toggle on" id="med-carvedilol" onclick="toggleMed(this)"></div></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title mc">Wetter</div>
+    <div class="weather-bar" id="weather-bar">
+      <span class="weather-info" id="weather-info">Noch nicht geladen</span>
+      <button class="weather-load-btn" onclick="loadWeather()">🌤️ Heute</button>
+    </div>
+    <button onclick="loadAllWeather()" style="width:100%;margin-top:8px;padding:8px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--bg3);color:var(--text-dim);font-size:12px;cursor:pointer;">🌍 Wetter für alle Tage laden (einmalig)</button>
+  </div>
+
+  <div class="section">
+    <div class="section-title mc">Blutdruck</div>
+    <div id="bp-morning-list"><div class="bp-empty">Keine Messungen für diesen Tag.</div></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title mc">Morgen-Notizen</div>
+    <div class="field">
+      <textarea class="txt" id="morning-notes" rows="3" placeholder="Wie fühlst du dich beim Aufwachen? Besonderes bemerkt?"></textarea>
+    </div>
+  </div>
+
+  <button class="save-btn save-morning" onclick="saveMorning()">☀️ Morgen speichern</button>
+</div>
+
+<!-- ===== EREIGNIS TAB ===== -->
+<div class="view" id="view-event">
+
+  <div id="event-list" class="event-list"></div>
+
+  <button class="add-event-btn" onclick="openEventForm()">⚡ + Neues Ereignis erfassen</button>
+
+  <!-- EVENT FORM -->
+  <div class="event-form" id="event-form">
+    <div class="section-title evc" style="margin-bottom:12px;">Neues Ereignis</div>
+
+    <div class="field">
+      <label class="field-label">Uhrzeit</label>
+      <input type="time" class="sleep-time-input" id="event-time" style="font-size:20px;width:140px;">
+    </div>
+
+    <div class="field">
+      <label class="field-label">Was spürst du gerade?</label>
+      <p class="field-hint">Mehrere auswählbar — tippe was zutrifft</p>
+      <div class="symptom-grid" id="symptom-grid">
+        <button class="sym-btn" data-sym="Schwindel" onclick="toggleSym(this)">🌀 Schwindel</button>
+        <button class="sym-btn" data-sym="Kopfschmerzen" onclick="toggleSym(this)">🤕 KS</button>
+        <button class="sym-btn" data-sym="Brain Fog" onclick="toggleSym(this)">🧠 Brain Fog</button>
+        <button class="sym-btn" data-sym="Fatigue" onclick="toggleSym(this)">😴 Fatigue</button>
+        <button class="sym-btn" data-sym="POTS/Zittrigkeit" onclick="toggleSym(this)">⚡ POTS</button>
+        <button class="sym-btn" data-sym="Reizempfindlichkeit" onclick="toggleSym(this)">📢 Reiz</button>
+        <button class="sym-btn" data-sym="Übelkeit" onclick="toggleSym(this)">🤢 Übelkeit</button>
+        <button class="sym-btn" data-sym="Herzrasen" onclick="toggleSym(this)">💓 Herzrasen</button>
+        <button class="sym-btn" data-sym="Nackenschmerz" onclick="toggleSym(this)">🫁 Nacken</button>
+        <button class="sym-btn" data-sym="Reizblase" onclick="toggleSym(this)">🚽 Blase</button>
+        <button class="sym-btn" data-sym="Sehstörung" onclick="toggleSym(this)">👁️ Sehen</button>
+        <button class="sym-btn" data-sym="Anderes" onclick="toggleSym(this);toggleOther(this)">➕ Anderes</button>
+      </div>
+      <input type="text" class="txt" id="other-symptom" placeholder="Welches Symptom?" style="display:none;margin-top:8px;">
+    </div>
+
+    <div class="field" id="intensity-field" style="display:none;">
+      <label class="field-label">Stärke (0–4)</label>
+      <div class="segment s5">
+        <button class="seg-btn" data-f="eventIntensity" data-v="0" onclick="pick(this,'ev')">0</button>
+        <button class="seg-btn" data-f="eventIntensity" data-v="1" onclick="pick(this,'ev')">1</button>
+        <button class="seg-btn" data-f="eventIntensity" data-v="2" onclick="pick(this,'ev')">2</button>
+        <button class="seg-btn" data-f="eventIntensity" data-v="3" onclick="pick(this,'ev')">3</button>
+        <button class="seg-btn" data-f="eventIntensity" data-v="4" onclick="pick(this,'ev')">4</button>
+      </div>
+    </div>
+
+    <!-- GEDANKENSTÜTZE -->
+    <div class="field">
+      <label class="field-label">Kontext / Notiz</label>
+      <div style="background:var(--bg3);border-radius:var(--radius-sm);padding:10px;margin-bottom:8px;font-size:12px;color:var(--text-dim);">
+        💡 <strong>Gedankenstütze:</strong> Hast du zuletzt gegessen? Wie lange stehst/sitzt du? War etwas stressig/emotional? Bist du dehydriert? Gerade aufgestanden?
+      </div>
+      <div class="dictate-row">
+        <button class="dictate-btn" id="dictate-btn" onclick="startDictation()">🎤 Diktieren</button>
+        <span style="font-size:12px;color:var(--text-dim);align-self:center;" id="dictate-status"></span>
+      </div>
+      <textarea class="txt" id="event-context" rows="3" placeholder="Beschreibe kurz was gerade passiert / was du getan hast..."></textarea>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px;">
+      <button onclick="closeEventForm()" style="padding:12px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--bg3);color:var(--text-dim);cursor:pointer;font-weight:600;">Abbrechen</button>
+      <button onclick="saveEvent()" class="save-btn save-event" style="margin-top:0;">Speichern</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== ABEND ===== -->
+<div class="view" id="view-evening">
+
+  <div class="section">
+    <div class="section-title ec">Migräne-Tag?</div>
+    <div class="segment s2">
+      <button class="seg-btn" data-f="migraineDay" data-v="Ja" onclick="pick(this,'e');updateBanner()">Ja 🌀</button>
+      <button class="seg-btn" data-f="migraineDay" data-v="Nein" onclick="pick(this,'e');updateBanner()">Nein</button>
+    </div>
+    <div id="migraine-banner" style="display:none;background:var(--migraine-soft);border:1px solid var(--migraine);border-radius:var(--radius-sm);padding:8px 12px;font-size:13px;color:var(--migraine);font-weight:600;margin-top:10px;text-align:center;">🌀 Migräne-Tag — im Kalender markiert</div>
+  </div>
+
+  <div class="section">
+    <div class="section-title ec">Alltag & Konsum</div>
+    <div class="field">
+      <label class="field-label">Bewegung</label>
+      <div class="segment s4">
+        <button class="seg-btn" data-f="movement" data-v="Nichts" onclick="pick(this,'e')">🛋️<br>Nichts</button>
+        <button class="seg-btn" data-f="movement" data-v="Leicht" onclick="pick(this,'e')">🚶<br>Leicht</button>
+        <button class="seg-btn" data-f="movement" data-v="Mittel" onclick="pick(this,'e')">🚴<br>Mittel</button>
+        <button class="seg-btn" data-f="movement" data-v="Intensiv" onclick="pick(this,'e')">🏃<br>Intensiv</button>
+      </div>
+    </div>
+    <div class="field" id="movement-good-field" style="display:none;">
+      <label class="field-label">Hat Bewegung gut getan?</label>
+      <div class="segment s2">
+        <button class="seg-btn" data-f="movementGood" data-v="Ja" onclick="pick(this,'g');toggleMoveNote()">👍 Ja</button>
+        <button class="seg-btn" data-f="movementGood" data-v="Nein" onclick="pick(this,'r');toggleMoveNote()">👎 Nein</button>
+      </div>
+    </div>
+    <div class="field" id="movement-note-field" style="display:none;">
+      <label class="field-label">Was war nicht gut?</label>
+      <textarea class="txt" id="movement-note" rows="2" placeholder="z.B. zu anstrengend, danach Schwindel..."></textarea>
+    </div>
+    <div class="field">
+      <label class="field-label">Soziale Kontakte heute</label>
+      <div class="segment s3">
+        <button class="seg-btn" data-f="social" data-v="Keine" onclick="pick(this,'e')">🏠 Keine</button>
+        <button class="seg-btn" data-f="social" data-v="Wenig" onclick="pick(this,'e')">👤 Wenig</button>
+        <button class="seg-btn" data-f="social" data-v="Viel" onclick="pick(this,'e')">👥 Viel</button>
+      </div>
+    </div>
+    <div class="field" id="social-good-field" style="display:none;">
+      <label class="field-label">Hat es gut getan?</label>
+      <div class="segment s2">
+        <button class="seg-btn" data-f="socialGood" data-v="Ja" onclick="pick(this,'g')">👍 Ja</button>
+        <button class="seg-btn" data-f="socialGood" data-v="Nein" onclick="pick(this,'r')">👎 Nein</button>
+      </div>
+    </div>
+    <div class="field">
+      <label class="field-label">Stark emotionales Ereignis heute</label>
+      <div class="segment s2">
+        <button class="seg-btn" data-f="emotionalEvent" data-v="Ja" onclick="pick(this,'e')">Ja</button>
+        <button class="seg-btn" data-f="emotionalEvent" data-v="Nein" onclick="pick(this,'e')">Nein</button>
+      </div>
+    </div>
+      <div class="segment s5">
+        <button class="seg-btn" data-f="coffee" data-v="0" onclick="pick(this,'e')">0</button>
+        <button class="seg-btn" data-f="coffee" data-v="1" onclick="pick(this,'e')">1</button>
+        <button class="seg-btn" data-f="coffee" data-v="2" onclick="pick(this,'e')">2</button>
+        <button class="seg-btn" data-f="coffee" data-v="3" onclick="pick(this,'e')">3</button>
+        <button class="seg-btn" data-f="coffee" data-v="4" onclick="pick(this,'e')">4</button>
+      </div>
+    </div>
+    <div class="field">
+      <label class="field-label">Alkohol</label>
+      <div class="segment s4">
+        <button class="seg-btn" data-f="alcohol" data-v="Nein" onclick="pick(this,'e')">Nein</button>
+        <button class="seg-btn" data-f="alcohol" data-v="Wenig" onclick="pick(this,'e')">Wenig</button>
+        <button class="seg-btn" data-f="alcohol" data-v="Mittel" onclick="pick(this,'e')">Mittel</button>
+        <button class="seg-btn" data-f="alcohol" data-v="Viel" onclick="pick(this,'e')">Viel</button>
+      </div>
+    </div>
+    <div class="field">
+      <label class="field-label">Bildschirmzeit</label>
+      <div class="segment s3">
+        <button class="seg-btn" data-f="screentime" data-v="Wenig" onclick="pick(this,'e')">📱 Wenig</button>
+        <button class="seg-btn" data-f="screentime" data-v="Mittel" onclick="pick(this,'e')">📱📱 Mittel</button>
+        <button class="seg-btn" data-f="screentime" data-v="Viel" onclick="pick(this,'e')">📱📱📱 Viel</button>
+      </div>
+    </div>
+    <div class="field">
+      <label class="field-label">Stimmung (0–4)</label>
+      <div class="segment s5">
+        <button class="seg-btn" data-f="mood" data-v="0" onclick="pick(this,'e')">0</button>
+        <button class="seg-btn" data-f="mood" data-v="1" onclick="pick(this,'e')">1</button>
+        <button class="seg-btn" data-f="mood" data-v="2" onclick="pick(this,'e')">2</button>
+        <button class="seg-btn" data-f="mood" data-v="3" onclick="pick(this,'e')">3</button>
+        <button class="seg-btn" data-f="mood" data-v="4" onclick="pick(this,'e')">4</button>
+      </div>
+    </div>
+    <div class="field">
+      <label class="field-label">Energy Level abends (0–4)</label>
+      <div class="segment s5">
+        <button class="seg-btn" data-f="energyE" data-v="0" onclick="pick(this,'e')">0<br><span style="font-size:9px">leer</span></button>
+        <button class="seg-btn" data-f="energyE" data-v="1" onclick="pick(this,'e')">1<br><span style="font-size:9px">wenig</span></button>
+        <button class="seg-btn" data-f="energyE" data-v="2" onclick="pick(this,'e')">2<br><span style="font-size:9px">ok</span></button>
+        <button class="seg-btn" data-f="energyE" data-v="3" onclick="pick(this,'e')">3<br><span style="font-size:9px">gut</span></button>
+        <button class="seg-btn" data-f="energyE" data-v="4" onclick="pick(this,'e')">4<br><span style="font-size:9px">top</span></button>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title ec">Akute Medikamente</div>
+    <div class="acute-med">
+      <div class="acute-cb" id="acute-domperidon" onclick="toggleAcute(this)"></div>
+      <div class="acute-name">Domperidon</div>
+    </div>
+    <div class="acute-med">
+      <div class="acute-cb" id="acute-ibuprofen" onclick="toggleAcute(this)"></div>
+      <div class="acute-name">Ibuprofen</div>
+      <input class="acute-dose" id="ibuprofen-dose" placeholder="Dosis (mg)">
+    </div>
+    <div class="acute-med">
+      <div class="acute-cb" id="acute-triptan" onclick="toggleAcute(this)"></div>
+      <div class="acute-name">Triptan</div>
+      <div class="segment s2" style="width:90px;">
+        <button class="seg-btn" data-f="triptanDose" data-v="1" onclick="pick(this,'e')" style="padding:5px;">1</button>
+        <button class="seg-btn" data-f="triptanDose" data-v="2" onclick="pick(this,'e')" style="padding:5px;">2</button>
+      </div>
+    </div>
+    <div class="acute-med">
+      <div class="acute-cb" id="acute-duofer" onclick="toggleAcute(this)"></div>
+      <div class="acute-name">Duofer</div>
+    </div>
+    <div class="acute-med">
+      <div class="acute-cb" id="acute-magnesium" onclick="toggleAcute(this)"></div>
+      <div class="acute-name">Magnesiumglycinat</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title ec">Blutdruck</div>
+    <div id="bp-evening-list"><div class="bp-empty">Keine Messungen für diesen Tag.</div></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title ec">Notizen</div>
+    <div class="field" id="morning-ref-section" style="display:none;">
+      <label class="field-label" style="color:var(--morning);">☀️ Morgen-Notizen</label>
+      <div id="morning-ref-text" style="font-size:14px;color:var(--text-dim);font-style:italic;background:var(--bg3);padding:10px 12px;border-radius:var(--radius-sm);border-left:3px solid var(--morning);"></div>
+    </div>
+    <div class="field">
+      <label class="field-label">Mögliche Auslöser</label>
+      <textarea class="txt" id="triggers" rows="2" placeholder="z.B. Stress, Wetter, schlechter Schlaf..."></textarea>
+    </div>
+    <div class="field">
+      <label class="field-label">🌙 Abend-Notiz</label>
+      <textarea class="txt" id="eve-notes" rows="3" placeholder="Wie war der Tag insgesamt?"></textarea>
+    </div>
+  </div>
+
+  <button class="save-btn save-evening" onclick="saveEvening()">🌙 Abend speichern</button>
+</div>
+
+<!-- ===== KALENDER ===== -->
+<div class="view" id="view-calendar">
+  <div class="sunday-banner" id="sunday-banner">
+    <div class="sunday-banner-title">📅 Wochenabschluss — CSV exportieren</div>
+    <button class="sunday-export-btn" onclick="exportCSV()">⬇️ CSV jetzt exportieren</button>
+  </div>
+  <div class="cal-legend">
+    <div class="legend-item"><div class="legend-dot" style="background:#c0392b;"></div>Migräne</div>
+    <div class="legend-item"><div class="legend-dot" style="background:transparent;border:2px solid var(--migraine);"></div>Stark. Schwindel</div>
+    <div class="legend-item"><div class="legend-dot" style="background:transparent;outline:2px solid var(--evening);"></div>Schl. Schlaf</div>
+    <div class="legend-item"><div class="legend-dot" style="background:rgba(224,85,85,0.35);"></div>Hoher BD</div>
+    <div class="legend-item"><span style="font-size:10px;font-weight:800;color:var(--event);">•</span>&nbsp;Ereignisse</div>
+    <div class="legend-item"><span style="font-size:10px;font-weight:800;color:var(--red);">•</span>&nbsp;Kein ADHS-Med</div>
+  </div>
+  <div id="calendar-grid"></div>
+  <button onclick="exportCSV()" style="width:100%;padding:12px;border-radius:var(--radius);border:1.5px solid var(--border);background:var(--bg3);color:var(--text-dim);font-size:14px;font-weight:600;cursor:pointer;margin-top:14px;">⬇️ CSV exportieren</button>
+</div>
+
+<!-- MODAL -->
+<div class="modal-overlay" id="modal-overlay" onclick="closeModal(event)">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-date-title"></div>
+      <button class="modal-close" onclick="document.getElementById('modal-overlay').classList.remove('open')">✕</button>
+    </div>
+    <div id="modal-content"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── STATE ────────────────────────────────────────────────
+let currentDate = new Date(); currentDate.setHours(0,0,0,0);
+const WEEKDAYS = ['Mo','Di','Mi','Do','Fr','Sa','So'];
+const MONTHS = ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+
+function dateKey(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+// ── GOOGLE DRIVE SYNC ────────────────────────────────────
+const DRIVE_FILE_NAME = 'migraine_diary_data.json';
+const CLIENT_ID = '799152036238-rgv5m6ng5ut359d52vepf34t4f1e3jud.apps.googleusercontent.com';
+let gisClient = null, driveFileId = null, memCache = {}, syncTimer = null;
+
+function loadLocal(k) { try { return JSON.parse(localStorage.getItem(k)||'null'); } catch(e) { return null; } }
+function saveLocal(k,v) { localStorage.setItem(k,JSON.stringify(v)); }
+function load(k) { return memCache[k] !== undefined ? (memCache[k]||{}) : (loadLocal(k)||{}); }
+function save(k,v) { memCache[k]=v; saveLocal(k,v); scheduleDriveSync(); }
+
+function setSyncStatus(state, msg) {
+  const dot=document.getElementById('sync-dot'), label=document.getElementById('sync-label');
+  if(!dot||!label) return;
+  dot.className='sync-dot '+(state==='ok'?'ok':state==='syncing'?'syncing':state==='error'?'error':'');
+  label.textContent=msg;
+}
+function scheduleDriveSync() { clearTimeout(syncTimer); syncTimer=setTimeout(syncToDrive,1500); }
+
+function initGoogleAuth() {
+  if(typeof google==='undefined') { setSyncStatus('local','Nur lokal'); return; }
+  google.accounts.id.initialize({client_id:CLIENT_ID, callback:()=>{}});
+  const tc = google.accounts.oauth2.initTokenClient({
+    client_id:CLIENT_ID,
+    scope:'https://www.googleapis.com/auth/drive.file',
+    callback:async(resp)=>{
+      if(resp.error){setSyncStatus('error','Anmeldung fehlgeschlagen');return;}
+      window._gToken=resp.access_token;
+      setTimeout(()=>{if(gisClient&&window._gToken)gisClient.requestAccessToken({prompt:''});},55*60*1000);
+      setSyncStatus('syncing','Verbinde...');
+      await loadFromDrive();
+    }
+  });
+  gisClient=tc;
+}
+function connectDrive() {
+  if(!gisClient){initGoogleAuth();if(!gisClient){alert('Google nicht verfügbar');return;}}
+  gisClient.requestAccessToken({prompt:'select_account'});
+}
+
+async function loadFromDrive() {
+  try {
+    setSyncStatus('syncing','Lade Daten...');
+    const sr=await fetch('https://www.googleapis.com/drive/v3/files?q=name%3D%22'+DRIVE_FILE_NAME+'%22+and+trashed%3Dfalse&fields=files(id,name)',{headers:{Authorization:'Bearer '+window._gToken}});
+    const sd=await sr.json();
+    if(sd.files&&sd.files.length>0){
+      driveFileId=sd.files[0].id;
+      const fr=await fetch('https://www.googleapis.com/drive/v3/files/'+driveFileId+'?alt=media',{headers:{Authorization:'Bearer '+window._gToken}});
+      const driveData=await fr.json();
+      Object.entries(driveData).forEach(([k,dv])=>{
+        const lv=memCache[k];
+        if(!lv){memCache[k]=dv;saveLocal(k,dv);}
+        else{const dt=dv.savedAt||'0',lt=lv.savedAt||'0';if(dt>=lt){memCache[k]=dv;saveLocal(k,dv);}}
+      });
+      await syncToDrive();
+      setSyncStatus('ok','Drive synchronisiert ✓');
+    } else {
+      await syncToDrive();
+      setSyncStatus('ok','Drive verbunden ✓');
+    }
+    const btn=document.getElementById('sync-connect-btn');
+    if(btn) btn.style.display='none';
+    if(currentTab!=='calendar') loadDayData(); else renderCalendar();
+  } catch(e) { setSyncStatus('error','Fehler beim Laden'); console.error(e); }
+}
+
+async function syncToDrive() {
+  if(!window._gToken) return;
+  try {
+    setSyncStatus('syncing','Speichere...');
+    const content=JSON.stringify(memCache);
+    const meta={name:DRIVE_FILE_NAME};
+    let url,method;
+    if(driveFileId){url='https://www.googleapis.com/upload/drive/v3/files/'+driveFileId+'?uploadType=multipart';method='PATCH';}
+    else{url='https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart';method='POST';}
+    const boundary='-------mg_boundary';
+    const body=`--${boundary}\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(meta)}\r\n--${boundary}\r\nContent-Type: application/json\r\n\r\n${content}\r\n--${boundary}--`;
+    const res=await fetch(url,{method,headers:{Authorization:'Bearer '+window._gToken,'Content-Type':'multipart/related; boundary='+boundary},body});
+    if(res.status===401||res.status===403){window._gToken=null;driveFileId=null;setSyncStatus('error','Token abgelaufen — neu verbinden');document.getElementById('sync-connect-btn').style.display='inline-block';return;}
+    const result=await res.json();
+    if(result.id) driveFileId=result.id;
+    setSyncStatus('ok','Drive synchronisiert ✓');
+    const btn=document.getElementById('sync-connect-btn');if(btn)btn.style.display='none';
+  } catch(e) { setSyncStatus('error','Sync-Fehler'); console.error(e); }
+}
+
+function mKey(d){return'mor_'+dateKey(d);}
+function eKey(d){return'eve_'+dateKey(d);}
+function evKey(d){return'evt_'+dateKey(d);}
+function bpKey(d){return'bp_'+dateKey(d);}
+
+// ── WETTER (Open-Meteo, PLZ 5430 Wettingen) ──────────────
+const WEATHER_LAT=47.4667, WEATHER_LON=8.3167;
+
+async function loadWeather() {
+  const key=dateKey(currentDate);
+  const cached=load('wx_'+key);
+  if(cached&&cached.tempMax!==undefined){renderWeather(cached);return;}
+  try {
+    document.getElementById('weather-info').textContent='Lädt...';
+    const today=dateKey(new Date());
+    const isPast=key<today;
+    // Use archive API for past dates, forecast for today/future
+    const baseUrl=isPast
+      ?`https://archive-api.open-meteo.com/v1/archive?latitude=${WEATHER_LAT}&longitude=${WEATHER_LON}&start_date=${key}&end_date=${key}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,weathercode&hourly=surface_pressure&timezone=Europe/Zurich`
+      :`https://api.open-meteo.com/v1/forecast?latitude=${WEATHER_LAT}&longitude=${WEATHER_LON}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,weathercode&hourly=surface_pressure&timezone=Europe/Zurich&start_date=${key}&end_date=${key}`;
+    const r=await fetch(baseUrl);
+    const d=await r.json();
+    const pressures=d.hourly?.surface_pressure||[];
+    const avgPressure=pressures.length?Math.round(pressures.reduce((a,b)=>a+b,0)/pressures.length):null;
+    const wx={
+      tempMax:d.daily?.temperature_2m_max?.[0]!==undefined?Math.round(d.daily.temperature_2m_max[0]*10)/10:null,
+      tempMin:d.daily?.temperature_2m_min?.[0]!==undefined?Math.round(d.daily.temperature_2m_min[0]*10)/10:null,
+      precip:d.daily?.precipitation_sum?.[0]!==undefined?Math.round(d.daily.precipitation_sum[0]*10)/10:null,
+      code:d.daily?.weathercode?.[0],
+      pressure:avgPressure,
+      savedAt:new Date().toISOString()
+    };
+    save('wx_'+key,wx);
+    renderWeather(wx);
+  } catch(e) {
+    document.getElementById('weather-info').textContent='Fehler beim Laden';
+    console.error(e);
+  }
+}
+
+async function loadAllWeather() {
+  const bar=document.getElementById('weather-bar');
+  if(bar) bar.innerHTML='<span style="color:var(--morning);font-size:12px;">⏳ Lade Wetter für alle Tage...</span>';
+  const today=new Date();
+  const start='2026-06-19'; // First diary entry
+  const end=dateKey(today);
+  try {
+    // Load daily data for whole range at once (much more efficient)
+    const url=`https://archive-api.open-meteo.com/v1/archive?latitude=${WEATHER_LAT}&longitude=${WEATHER_LON}&start_date=${start}&end_date=${end}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,weathercode&hourly=surface_pressure&timezone=Europe/Zurich`;
+    const r=await fetch(url);
+    const d=await r.json();
+    const dates=d.daily?.time||[];
+    const pressures=d.hourly?.surface_pressure||[];
+    const times=d.hourly?.time||[];
+    // Group pressures by date
+    const pressByDate={};
+    times.forEach((t,i)=>{
+      const dk=t.split('T')[0];
+      if(!pressByDate[dk]) pressByDate[dk]=[];
+      pressByDate[dk].push(pressures[i]);
+    });
+    dates.forEach((date,i)=>{
+      const existing=load('wx_'+date);
+      if(existing&&existing.tempMax!==undefined) return; // Skip already loaded
+      const dayPressures=pressByDate[date]||[];
+      const avg=dayPressures.length?Math.round(dayPressures.reduce((a,b)=>a+b,0)/dayPressures.length):null;
+      const wx={
+        tempMax:d.daily.temperature_2m_max?.[i]!==undefined?Math.round(d.daily.temperature_2m_max[i]*10)/10:null,
+        tempMin:d.daily.temperature_2m_min?.[i]!==undefined?Math.round(d.daily.temperature_2m_min[i]*10)/10:null,
+        precip:d.daily.precipitation_sum?.[i]!==undefined?Math.round(d.daily.precipitation_sum[i]*10)/10:null,
+        code:d.daily.weathercode?.[i],
+        pressure:avg,
+        savedAt:new Date().toISOString()
+      };
+      save('wx_'+date,wx);
+    });
+    showToast('🌍 Wetter für alle Tage geladen!');
+    // Refresh current day display
+    const wx=load('wx_'+dateKey(currentDate));
+    if(wx&&wx.tempMax!==undefined) renderWeather(wx);
+    else if(bar) bar.innerHTML='<span class="weather-info">Geladen ✓</span><button class="weather-load-btn" onclick="loadWeather()">↻</button>';
+  } catch(e) {
+    if(bar) bar.innerHTML='<span style="color:var(--red);font-size:12px;">Fehler beim Laden</span><button class="weather-load-btn" onclick="loadWeather()">↻</button>';
+    console.error(e);
+  }
+}
+  if(code===0) return '☀️';
+  if(code<=3) return '⛅';
+  if(code<=48) return '🌫️';
+  if(code<=67) return '🌧️';
+  if(code<=77) return '❄️';
+  if(code<=82) return '🌦️';
+  if(code<=99) return '⛈️';
+  return '🌤️';
+}
+
+function renderWeather(wx) {
+  const bar=document.getElementById('weather-bar');
+  if(!bar) return;
+  const icon=wxCodeToIcon(wx.code||0);
+  const pressureAlert=wx.pressure&&(wx.pressure<980||wx.pressure>1030);
+  bar.innerHTML=`
+    <div>
+      <div style="font-size:16px;">${icon} ${wx.tempMin??'?'}–${wx.tempMax??'?'}°C</div>
+      <div style="font-size:11px;color:var(--text-dim);">Niederschlag: ${wx.precip??'?'}mm · Luftdruck: ${wx.pressure??'?'}hPa${pressureAlert?' ⚠️':''}</div>
+      ${pressureAlert?'<div style="color:var(--red);font-size:11px;font-weight:700;margin-top:3px;">⚠️ Auffälliger Luftdruck</div>':''}
+    </div>
+    <button class="weather-load-btn" onclick="loadWeather()">↻</button>
+  `;
+}
+
+// ── TABS ─────────────────────────────────────────────────
+let currentTab='morning';
+function switchTab(tab) {
+  currentTab=tab;
+  ['morning','event','evening','calendar'].forEach(t=>{
+    document.getElementById('view-'+t).classList.toggle('active',t===tab);
+    const btn=document.getElementById('tab-'+t);
+    btn.className='tab-btn';
+    if(t===tab) btn.classList.add('active-'+t);
+  });
+  if(tab==='calendar') renderCalendar();
+  else if(tab==='event') renderEventList();
+  else loadDayData();
+}
+
+// ── DATE NAV ─────────────────────────────────────────────
+function updateDateLabel() {
+  const wd=WEEKDAYS[(currentDate.getDay()+6)%7];
+  document.getElementById('dateLabel').textContent=`${wd}, ${currentDate.getDate()}. ${MONTHS[currentDate.getMonth()]}`;
+}
+function changeDay(d){currentDate.setDate(currentDate.getDate()+d);updateDateLabel();if(currentTab==='calendar')renderCalendar();else if(currentTab==='event')renderEventList();else loadDayData();}
+function goToday(){currentDate=new Date();currentDate.setHours(0,0,0,0);updateDateLabel();if(currentTab==='calendar')renderCalendar();else if(currentTab==='event')renderEventList();else loadDayData();}
+
+// ── SEGMENT PICKER ───────────────────────────────────────
+function pick(btn,mode) {
+  const f=btn.dataset.f;
+  document.querySelectorAll(`[data-f="${f}"]`).forEach(b=>b.classList.remove('sel-m','sel-e','sel-ev','sel-g','sel-r'));
+  const cls=mode==='m'?'sel-m':mode==='ev'?'sel-ev':mode==='g'?'sel-g':mode==='r'?'sel-r':'sel-e';
+  btn.classList.add(cls);
+  if(f==='movement'){document.getElementById('movement-good-field').style.display=btn.dataset.v==='Nichts'?'none':'block';}
+  if(f==='social'){document.getElementById('social-good-field').style.display=btn.dataset.v==='Keine'?'none':'block';}
+}
+function getV(f){const s=document.querySelector(`[data-f="${f}"].sel-m,[data-f="${f}"].sel-e,[data-f="${f}"].sel-ev,[data-f="${f}"].sel-g,[data-f="${f}"].sel-r`);return s?s.dataset.v:null;}
+function setV(f,v){
+  document.querySelectorAll(`[data-f="${f}"]`).forEach(b=>{
+    b.classList.remove('sel-m','sel-e','sel-ev','sel-g','sel-r');
+    if(b.dataset.v===String(v)){
+      const mf=['sleepQ','breakfastMissed','energyM'];
+      b.classList.add(mf.includes(f)?'sel-m':f==='eventIntensity'?'sel-ev':'sel-e');
+    }
+  });
+}
+
+// ── TOGGLES ──────────────────────────────────────────────
+function toggleMed(el){el.classList.toggle('on');}
+function toggleAcute(el){el.classList.toggle('checked');el.textContent=el.classList.contains('checked')?'✓':'';}
+function toggleMoveNote(){const s=document.querySelector('[data-f="movementGood"].sel-r');document.getElementById('movement-note-field').style.display=s?'block':'none';}
+function updateBanner(){const s=document.querySelector('[data-f="migraineDay"].sel-e');document.getElementById('migraine-banner').style.display=(s&&s.dataset.v==='Ja')?'block':'none';}
+
+// ── SLEEP CALC ───────────────────────────────────────────
+function calcSleep(){
+  const bed=document.getElementById('bedtime').value, wake=document.getElementById('waketime').value;
+  const disp=document.getElementById('sleep-dur');
+  if(!bed||!wake){disp.style.display='none';return;}
+  const [bh,bm]=bed.split(':').map(Number),[wh,wm]=wake.split(':').map(Number);
+  let bM=bh*60+bm,wM=wh*60+wm;
+  if(wM<=bM) wM+=24*60;
+  const total=wM-bM, h=Math.floor(total/60), m=total%60;
+  disp.style.display='block';
+  disp.textContent=`⏱ Schlafdauer: ${h}h${m>0?' '+m+'min':''}`;
+}
+
+// ── EVENT TAB ────────────────────────────────────────────
+function toggleSym(btn){btn.classList.toggle('sel');updateIntensityVisibility();}
+function toggleOther(btn){const f=document.getElementById('other-symptom');f.style.display=btn.classList.contains('sel')?'block':'none';}
+function updateIntensityVisibility(){const any=document.querySelectorAll('.sym-btn.sel').length>0;document.getElementById('intensity-field').style.display=any?'block':'none';}
+
+let editingEventId = null;
+
+function openEventForm(editId=null){
+  editingEventId=editId;
+  const form=document.getElementById('event-form');
+  form.classList.add('open');
+  document.querySelectorAll('.sym-btn').forEach(b=>b.classList.remove('sel'));
+  document.getElementById('other-symptom').style.display='none';
+  document.getElementById('other-symptom').value='';
+  document.getElementById('intensity-field').style.display='none';
+  document.querySelectorAll('[data-f="eventIntensity"]').forEach(b=>b.classList.remove('sel-ev'));
+  document.getElementById('event-context').value='';
+  document.getElementById('event-type-field') && document.querySelectorAll('[data-f="eventType"]').forEach(b=>b.classList.remove('sel-m','sel-e','sel-ev','sel-g','sel-r'));
+
+  if(editId){
+    // Load existing event data
+    const evData=load(evKey(currentDate));
+    const ev=(evData.events||[]).find(e=>e.id===editId);
+    if(ev){
+      document.getElementById('event-time').value=ev.time||'';
+      document.getElementById('event-context').value=ev.context||'';
+      if(ev.intensity!==null&&ev.intensity!==undefined) setV('eventIntensity',ev.intensity);
+      (ev.symptoms||[]).forEach(sym=>{
+        const btn=document.querySelector(`.sym-btn[data-sym="${sym}"]`);
+        if(btn) btn.classList.add('sel');
+      });
+      updateIntensityVisibility();
+    }
+    document.querySelector('.save-event').textContent='✏️ Aktualisieren';
+  } else {
+    const now=new Date();
+    document.getElementById('event-time').value=`${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+    document.querySelector('.save-event').textContent='Speichern';
+  }
+  form.scrollIntoView({behavior:'smooth'});
+}
+
+function closeEventForm(){document.getElementById('event-form').classList.remove('open');}
+
+function saveEvent(){
+  const time=document.getElementById('event-time').value;
+  const syms=Array.from(document.querySelectorAll('.sym-btn.sel')).map(b=>b.dataset.sym);
+  const other=document.getElementById('other-symptom').value.trim();
+  if(other&&syms.includes('Anderes')) syms[syms.indexOf('Anderes')]=other;
+  const intensity=getV('eventIntensity');
+  const context=document.getElementById('event-context').value.trim();
+  if(syms.length===0&&!context){showToast('Bitte mindestens ein Symptom oder Kontext eingeben');return;}
+  const evData=load(evKey(currentDate));
+  let events=evData.events||[];
+  if(editingEventId){
+    // Update existing
+    events=events.map(e=>e.id===editingEventId?{...e,time,symptoms:syms,intensity,context,savedAt:new Date().toISOString()}:e);
+    showToast('✏️ Ereignis aktualisiert!');
+  } else {
+    events.push({time,symptoms:syms,intensity,context,id:Date.now(),savedAt:new Date().toISOString()});
+    showToast('⚡ Ereignis gespeichert!');
+  }
+  save(evKey(currentDate),{events,savedAt:new Date().toISOString()});
+  editingEventId=null;
+  closeEventForm();
+  renderEventList();
+}
+
+function deleteEvent(id){
+  const evData=load(evKey(currentDate));
+  const events=(evData.events||[]).filter(e=>e.id!==id);
+  save(evKey(currentDate),{events,savedAt:new Date().toISOString()});
+  renderEventList();
+  showToast('Ereignis gelöscht');
+}
+
+function renderEventList(){
+  const container=document.getElementById('event-list');
+  const evData=load(evKey(currentDate));
+  const events=(evData.events||[]).sort((a,b)=>a.time.localeCompare(b.time));
+  if(events.length===0){container.innerHTML='<div style="color:var(--text-dim);font-size:14px;text-align:center;padding:20px 0;font-style:italic;">Noch keine Ereignisse für diesen Tag.<br>Tippe auf + Neues Ereignis wenn etwas passiert.</div>';return;}
+  container.innerHTML=events.map(e=>`
+    <div class="event-card">
+      <div style="position:absolute;top:10px;right:10px;display:flex;gap:6px;">
+        <button onclick="openEventForm(${e.id})" style="background:var(--bg3);border:1px solid var(--border);color:var(--text-dim);padding:4px 8px;border-radius:6px;cursor:pointer;font-size:12px;">✏️</button>
+        <button onclick="deleteEvent(${e.id})" style="background:var(--bg3);border:1px solid var(--border);color:var(--text-dim);padding:4px 8px;border-radius:6px;cursor:pointer;font-size:12px;">✕</button>
+      </div>
+      <div class="event-card-time">⏱ ${e.time}${e.intensity!==null&&e.intensity!==undefined?' · Stärke '+e.intensity+'/4':''}</div>
+      <div class="event-card-symptoms">${(e.symptoms||[]).map(s=>`<span class="symptom-badge">${s}</span>`).join('')}</div>
+      ${e.context?`<div class="event-card-text">${e.context}</div>`:''}
+    </div>
+  `).join('');
+}
+
+// ── DIKTIERFUNKTION ──────────────────────────────────────
+let recognition=null;
+function startDictation(){
+  const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SpeechRecognition){showToast('Diktierfunktion nicht verfügbar in diesem Browser');return;}
+  const btn=document.getElementById('dictate-btn');
+  const status=document.getElementById('dictate-status');
+  // Stop if already recording
+  if(recognition&&recognition._active){
+    recognition.stop();
+    recognition._active=false;
+    btn.classList.remove('recording');
+    btn.textContent='🎤 Diktieren';
+    status.textContent='';
+    return;
+  }
+  recognition=new SpeechRecognition();
+  recognition.lang='de-DE';
+  recognition.continuous=true;  // Stay active until manually stopped
+  recognition.interimResults=true;
+  recognition._active=true;
+  btn.classList.add('recording');
+  btn.textContent='🔴 Stop';
+  status.textContent='Sprich jetzt — tippe Stop wenn fertig';
+  let finalText='';
+  recognition.onresult=(e)=>{
+    let interim='';
+    for(let i=e.resultIndex;i<e.results.length;i++){
+      if(e.results[i].isFinal){
+        finalText+=e.results[i][0].transcript+' ';
+        detectSymptomsFromText(e.results[i][0].transcript);
+      } else {
+        interim=e.results[i][0].transcript;
+      }
+    }
+    document.getElementById('event-context').value=finalText+interim;
+    status.textContent='🎤 '+finalText.substring(Math.max(0,finalText.length-40));
+  };
+  recognition.onerror=(e)=>{
+    if(e.error!=='aborted'){status.textContent='Fehler: '+e.error;}
+  };
+  recognition.onend=()=>{
+    // Auto-restart if still active (handles browser timeouts)
+    if(recognition._active){
+      try{recognition.start();}catch(err){
+        recognition._active=false;
+        btn.classList.remove('recording');
+        btn.textContent='🎤 Diktieren';
+      }
+    } else {
+      btn.classList.remove('recording');
+      btn.textContent='🎤 Diktieren';
+      setTimeout(()=>{status.textContent='';},3000);
+    }
+  };
+  recognition.start();
+}
+
+const SYMPTOM_KEYWORDS={
+  'Schwindel':['schwindel','schwindlig','dreht sich','dreht','vestibulär'],
+  'Kopfschmerzen':['kopfschmerz','kopfweh','ks','migräne','schmerzt','drückt im kopf','klopft'],
+  'Brain Fog':['brain fog','neblig','unklar','konzentration','fog','benebelt','verwirrt'],
+  'Fatigue':['fatigue','müde','erschöpft','kraftlos','erschöpfung','keine energie'],
+  'POTS/Zittrigkeit':['pots','zitter','zittrig','herzrasen','puls','tachykardie'],
+  'Reizempfindlichkeit':['reiz','lärm','licht','geräusch','empfindlich','sensitiv'],
+  'Übelkeit':['übelkeit','schlecht','erbrechen','würgen'],
+  'Herzrasen':['herzrasen','puls','herz','klopft'],
+  'Nackenschmerz':['nacken','nackenschmerz','steif','verspannt'],
+  'Reizblase':['blase','pinkeln','wc','toilette','harndrang'],
+};
+
+function detectSymptomsFromText(text){
+  const lower=text.toLowerCase();
+  document.querySelectorAll('.sym-btn').forEach(btn=>{
+    const sym=btn.dataset.sym;
+    const keywords=SYMPTOM_KEYWORDS[sym]||[];
+    if(keywords.some(kw=>lower.includes(kw))){
+      btn.classList.add('sel');
+    }
+  });
+  updateIntensityVisibility();
+}
+
+// ── LOAD DAY ─────────────────────────────────────────────
+function loadDayData(){if(currentTab==='morning')loadMorning();else if(currentTab==='evening')loadEvening();}
+
+function loadMorning(){
+  const d=load(mKey(currentDate));
+  document.querySelectorAll('[data-f]').forEach(b=>{if(['sleepQ','breakfastMissed','energyM'].includes(b.dataset.f))b.classList.remove('sel-m','sel-e','sel-ev','sel-g','sel-r');});
+  document.getElementById('bedtime').value='';
+  document.getElementById('waketime').value='';
+  document.getElementById('sleep-dur').style.display='none';
+  ['elvanse','betmiga','toviaz','carvedilol'].forEach(m=>document.getElementById('med-'+m).className='med-toggle on');
+  document.getElementById('elvanse-dose').value='';
+  document.getElementById('morning-notes').value='';
+  if(d.bedtime){document.getElementById('bedtime').value=d.bedtime;}
+  if(d.waketime){document.getElementById('waketime').value=d.waketime;}
+  if(d.bedtime&&d.waketime) calcSleep();
+  if(d.sleepQ) setV('sleepQ',d.sleepQ);
+  if(d.breakfastMissed) setV('breakfastMissed',d.breakfastMissed);
+  if(d.energyM!==undefined) setV('energyM',d.energyM);
+  if(d.elvanseDose) document.getElementById('elvanse-dose').value=d.elvanseDose;
+  if(d.notes) document.getElementById('morning-notes').value=d.notes;
+  if(d.meds){['elvanse','betmiga','toviaz','carvedilol'].forEach(m=>{if(d.meds[m]===false)document.getElementById('med-'+m).classList.remove('on');});}
+  renderBP('bp-morning-list');
+  // Reset weather bar for this day
+  const bar=document.getElementById('weather-bar');
+  if(bar) bar.innerHTML=`<span class="weather-info" id="weather-info">Noch nicht geladen</span><button class="weather-load-btn" onclick="loadWeather()">🌤️ Laden</button>`;
+  // Auto-load weather if already cached for this day
+  const wx=load('wx_'+dateKey(currentDate));
+  if(wx&&wx.tempMax!==undefined) renderWeather(wx);
+}
+
+function loadEvening(){
+  // Show morning notes as reference
+  const morData=load(mKey(currentDate));
+  const refSection=document.getElementById('morning-ref-section');
+  const refText=document.getElementById('morning-ref-text');
+  if(morData.notes&&morData.notes.trim()){
+    refSection.style.display='block';
+    refText.textContent=morData.notes;
+  } else {
+    refSection.style.display='none';
+  }
+  const d=load(eKey(currentDate));
+  const eveFields=['migraineDay','movement','movementGood','social','socialGood','emotionalEvent','coffee','alcohol','screentime','mood','energyE','triptanDose'];
+  eveFields.forEach(f=>document.querySelectorAll(`[data-f="${f}"]`).forEach(b=>b.classList.remove('sel-m','sel-e','sel-ev','sel-g','sel-r')));
+  ['domperidon','ibuprofen','triptan','duofer','magnesium'].forEach(m=>{const el=document.getElementById('acute-'+m);if(el){el.classList.remove('checked');el.textContent='';}});
+  document.getElementById('ibuprofen-dose').value='';
+  document.getElementById('movement-note').value='';
+  document.getElementById('movement-note-field').style.display='none';
+  document.getElementById('movement-good-field').style.display='none';
+  document.getElementById('social-good-field').style.display='none';
+  document.getElementById('triggers').value='';
+  document.getElementById('eve-notes').value='';
+  document.getElementById('migraine-banner').style.display='none';
+  if(!d||!Object.keys(d).length){renderBP('bp-evening-list');return;}
+  ['migraineDay','movement','coffee','alcohol','screentime','mood','energyE','triptanDose','social','socialGood','emotionalEvent'].forEach(f=>{if(d[f]!==undefined&&d[f]!==null)setV(f,d[f]);});
+  if(d.social&&d.social!=='Keine') document.getElementById('social-good-field').style.display='block';
+  if(d.movementGood){document.querySelectorAll('[data-f="movementGood"]').forEach(b=>{b.classList.remove('sel-g','sel-r');if(b.dataset.v===d.movementGood)b.classList.add(d.movementGood==='Ja'?'sel-g':'sel-r');});}
+  if(d.movement&&d.movement!=='Nichts')document.getElementById('movement-good-field').style.display='block';
+  if(d.movementNote){document.getElementById('movement-note').value=d.movementNote;document.getElementById('movement-note-field').style.display='block';}
+  if(d.acuteMeds)d.acuteMeds.forEach(m=>{const el=document.getElementById('acute-'+m);if(el){el.classList.add('checked');el.textContent='✓';}});
+  if(d.ibuprofenDose)document.getElementById('ibuprofen-dose').value=d.ibuprofenDose;
+  if(d.triggers)document.getElementById('triggers').value=d.triggers;
+  if(d.notes)document.getElementById('eve-notes').value=d.notes;
+  updateBanner();
+  renderBP('bp-evening-list');
+}
+
+// ── SAVE ─────────────────────────────────────────────────
+function saveMorning(){
+  const bed=document.getElementById('bedtime').value, wake=document.getElementById('waketime').value;
+  let sleepDuration=null;
+  if(bed&&wake){const[bh,bm]=bed.split(':').map(Number),[wh,wm]=wake.split(':').map(Number);let bM=bh*60+bm,wM=wh*60+wm;if(wM<=bM)wM+=24*60;sleepDuration=((wM-bM)/60).toFixed(1);}
+  save(mKey(currentDate),{bedtime:bed,waketime:wake,sleepDuration,sleepQ:getV('sleepQ'),breakfastMissed:getV('breakfastMissed'),energyM:getV('energyM'),elvanseDose:document.getElementById('elvanse-dose').value,notes:document.getElementById('morning-notes').value,meds:{elvanse:document.getElementById('med-elvanse').classList.contains('on'),betmiga:document.getElementById('med-betmiga').classList.contains('on'),toviaz:document.getElementById('med-toviaz').classList.contains('on'),carvedilol:document.getElementById('med-carvedilol').classList.contains('on')},savedAt:new Date().toISOString()});
+  showToast('☀️ Morgen gespeichert!');
+}
+
+function saveEvening(){
+  const acuteMeds=[];
+  ['domperidon','ibuprofen','triptan','duofer','magnesium'].forEach(m=>{if(document.getElementById('acute-'+m).classList.contains('checked'))acuteMeds.push(m);});
+  save(eKey(currentDate),{migraineDay:getV('migraineDay'),movement:getV('movement'),movementGood:getV('movementGood'),movementNote:document.getElementById('movement-note').value,social:getV('social'),socialGood:getV('socialGood'),emotionalEvent:getV('emotionalEvent'),coffee:getV('coffee'),alcohol:getV('alcohol'),screentime:getV('screentime'),mood:getV('mood'),energyE:getV('energyE'),triptanDose:getV('triptanDose'),acuteMeds,ibuprofenDose:document.getElementById('ibuprofen-dose').value,triggers:document.getElementById('triggers').value,notes:document.getElementById('eve-notes').value,savedAt:new Date().toISOString()});
+  showToast('🌙 Abend gespeichert!');
+}
+
+// ── TOAST ────────────────────────────────────────────────
+function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200);}
+
+// ── BP ───────────────────────────────────────────────────
+function renderBP(id){
+  const c=document.getElementById(id);if(!c)return;
+  const m=load(bpKey(currentDate));
+  if(!m.list||!m.list.length){c.innerHTML='<div class="bp-empty">Keine Messungen für diesen Tag.</div>';return;}
+  c.innerHTML=m.list.map(x=>{const h=parseInt(x.sys)>135||parseInt(x.dia)>100;return`<div class="bp-entry"><div><div class="bp-val ${h?'high':''}">${x.sys}/${x.dia} mmHg${h?' ⚠️':''}</div>${x.pulse?`<div class="bp-time">Puls: ${x.pulse} bpm</div>`:''}</div><div class="bp-time">${x.time||''}</div></div>`;}).join('');
+}
+
+// ── CALENDAR ─────────────────────────────────────────────
+function renderCalendar(){
+  const container=document.getElementById('calendar-grid');container.innerHTML='';
+  for(let m=0;m<12;m++){
+    const me=document.createElement('div');me.className='cal-month';
+    const ti=document.createElement('div');ti.className='cal-month-title';ti.textContent=MONTHS[m]+' 2026';me.appendChild(ti);
+    const gr=document.createElement('div');gr.className='cal-grid';
+    WEEKDAYS.forEach(wd=>{const w=document.createElement('div');w.className='cal-wd';w.textContent=wd;gr.appendChild(w);});
+    const sw=(new Date(2026,m,1).getDay()+6)%7, dim=new Date(2026,m+1,0).getDate();
+    for(let i=0;i<sw;i++){const e=document.createElement('div');e.className='cal-day empty';gr.appendChild(e);}
+    for(let d=1;d<=dim;d++){
+      const date=new Date(2026,m,d), key=dateKey(date);
+      const mor=load('mor_'+key), eve=load('eve_'+key), bp=load('bp_'+key), evt=load('evt_'+key);
+      const de=document.createElement('div');de.className='cal-day';
+      const today=new Date();today.setHours(0,0,0,0);
+      if(date.getTime()===today.getTime()) de.classList.add('today');
+      if(eve.migraineDay==='Ja') de.classList.add('migraine');
+      if(parseInt(eve.dizziness)>=3) de.classList.add('strong-diz');
+      if(mor.sleepQ==='Schlecht') de.classList.add('bad-sleep');
+      if(bp.list&&bp.list.some(x=>parseInt(x.sys)>135||parseInt(x.dia)>100)) de.classList.add('high-bp');
+      const adhs_missed=mor.meds&&mor.meds.elvanse===false;
+      const hasEvents=evt.events&&evt.events.length>0;
+      const num=document.createElement('div');num.className='day-num';num.textContent=d;de.appendChild(num);
+      if(adhs_missed){const dot=document.createElement('div');dot.className='no-adhs-dot';de.appendChild(dot);}
+      if(hasEvents){const dot=document.createElement('div');dot.className='has-events-dot';de.appendChild(dot);}
+      de.onclick=()=>openModal(date,mor,eve,bp,evt);
+      gr.appendChild(de);
+    }
+    me.appendChild(gr);container.appendChild(me);
+  }
+}
+
+// ── MODAL ────────────────────────────────────────────────
+function openModal(date,mor,eve,bp,evt){
+  const wd=WEEKDAYS[(date.getDay()+6)%7];
+  document.getElementById('modal-date-title').textContent=`${wd}, ${date.getDate()}. ${MONTHS[date.getMonth()]} 2026`;
+  let html='';
+  // Weather
+  const wx=load('wx_'+dateKey(date));
+  if(wx&&wx.tempMax!==undefined){
+    html+=`<div class="modal-sec">🌤️ Wetter</div>`;
+    html+=row('Temperatur',`${wx.tempMin}–${wx.tempMax}°C`);
+    html+=row('Luftdruck',`${wx.pressure||'?'} hPa${wx.pressure&&(wx.pressure<1000||wx.pressure>1025)?' ⚠️':''}`);
+    html+=row('Niederschlag',`${wx.precip||0} mm`);
+  }
+  // Morning
+  if(Object.keys(mor).length){
+    html+='<div class="modal-sec">☀️ Morgen</div>';
+    if(mor.bedtime||mor.waketime) html+=row('Schlaf',`${mor.bedtime||'?'} → ${mor.waketime||'?'}${mor.sleepDuration?' ('+mor.sleepDuration+'h)':''}`);
+    if(mor.sleepQ) html+=row('Schlafqualität',mor.sleepQ);
+    if(mor.energyM!==undefined) html+=row('Energy (morgens)',mor.energyM+'/4');
+    if(mor.breakfastMissed) html+=row('Frühstück verpasst',mor.breakfastMissed);
+    if(mor.meds){
+      const taken=Object.entries(mor.meds).filter(([k,v])=>v).map(([k])=>k==='elvanse'?'Elvanse'+(mor.elvanseDose?' ('+mor.elvanseDose+')':''):k.charAt(0).toUpperCase()+k.slice(1));
+      const missed=Object.entries(mor.meds).filter(([k,v])=>!v).map(([k])=>k.charAt(0).toUpperCase()+k.slice(1));
+      if(taken.length) html+=row('Medikamente',taken.join(', '));
+      if(missed.length) html+=row('Nicht genommen',missed.join(', '),'color:var(--red)');
+    }
+    if(mor.notes) html+=row('Morgen-Notiz',mor.notes);
+  }
+  // Events
+  if(evt.events&&evt.events.length){
+    html+='<div class="modal-sec">⚡ Ereignisse</div>';
+    evt.events.sort((a,b)=>a.time.localeCompare(b.time)).forEach(e=>{
+      html+=`<div style="padding:8px 0;border-bottom:1px solid var(--border);">
+        <div style="font-size:12px;color:var(--event);font-weight:700;">${e.time}${e.intensity!==null&&e.intensity!==undefined?' · Stärke '+e.intensity+'/4':''}</div>
+        <div style="font-size:12px;color:var(--text-dim);">${(e.symptoms||[]).join(' · ')}</div>
+        ${e.context?`<div style="font-size:13px;margin-top:3px;">${e.context}</div>`:''}
+      </div>`;
+    });
+  }
+  // Evening
+  if(Object.keys(eve).length){
+    html+='<div class="modal-sec">🌙 Abend</div>';
+    if(eve.migraineDay) html+=row('Migräne-Tag',eve.migraineDay);
+    if(eve.movement) html+=row('Bewegung',eve.movement+(eve.movementGood?' ('+eve.movementGood+')':'')+(eve.movementNote?' — '+eve.movementNote:''));
+    if(eve.social) html+=row('Soziale Kontakte',eve.social+(eve.socialGood?' ('+eve.socialGood+')':''));
+    if(eve.emotionalEvent) html+=row('Emotionales Ereignis',eve.emotionalEvent);
+    if(eve.coffee) html+=row('Kaffee',eve.coffee+' Tassen');
+    if(eve.alcohol) html+=row('Alkohol',eve.alcohol);
+    if(eve.screentime) html+=row('Bildschirmzeit',eve.screentime);
+    if(eve.mood!==null&&eve.mood!==undefined) html+=row('Stimmung',eve.mood+'/4');
+    if(eve.energyE!==null&&eve.energyE!==undefined) html+=row('Energy (abends)',eve.energyE+'/4');
+    if(eve.acuteMeds&&eve.acuteMeds.length){
+      const list=eve.acuteMeds.map(m=>{if(m==='ibuprofen'&&eve.ibuprofenDose)return`Ibuprofen (${eve.ibuprofenDose}mg)`;if(m==='triptan'&&eve.triptanDose)return`Triptan (${eve.triptanDose} Tbl.)`;return m.charAt(0).toUpperCase()+m.slice(1);});
+      html+=row('Akute Medikamente',list.join(', '));
+    }
+    if(eve.triggers) html+=row('Auslöser',eve.triggers);
+    if(eve.notes) html+=row('Tagesnotiz',eve.notes);
+  }
+  if(bp.list&&bp.list.length){
+    html+='<div class="modal-sec">💉 Blutdruck</div>';
+    bp.list.forEach(x=>{const h=parseInt(x.sys)>135||parseInt(x.dia)>100;html+=row(x.time||'—',`${x.sys}/${x.dia} mmHg${x.pulse?' · '+x.pulse+' bpm':''}${h?' ⚠️':''}`,h?'color:var(--red)':'');});
+  }
+  if(!html) html='<p style="color:var(--text-dim);text-align:center;padding:20px 0;">Kein Eintrag für diesen Tag.</p>';
+  document.getElementById('modal-content').innerHTML=html;
+  document.getElementById('modal-overlay').classList.add('open');
+}
+function row(label,val,style=''){return`<div class="modal-row"><span class="modal-row-label">${label}</span><span class="modal-row-value" style="${style}">${val}</span></div>`;}
+function closeModal(e){if(e.target===document.getElementById('modal-overlay'))document.getElementById('modal-overlay').classList.remove('open');}
+
+// ── CSV EXPORT ───────────────────────────────────────────
+function exportCSV(){
+  const headers=['Datum','Wochentag','Bettzeit','Aufwachzeit','Schlafdauer','Schlafqualität','Frühstück verpasst','Energy (morgens)','Morgen-Notiz','Elvanse','Elvanse Dosis','Betmiga','Toviaz','Carvedilol','Wetter Temp Max','Wetter Luftdruck','Migräne-Tag','Bewegung','Bewegung gut getan','Kaffee','Alkohol','Bildschirmzeit','Stimmung','Energy (abends)','Domperidon','Ibuprofen','Ibuprofen Dosis','Triptan','Triptan Dosis','Duofer','Magnesiumglycinat','Auslöser','Abend-Notiz','Ereignisse'];
+  const rows=[headers];
+  for(let m=0;m<12;m++){
+    const dim=new Date(2026,m+1,0).getDate();
+    for(let d=1;d<=dim;d++){
+      const date=new Date(2026,m,d),key=dateKey(date);
+      const mor=load('mor_'+key),eve=load('eve_'+key),bp=load('bp_'+key),evt=load('evt_'+key),wx=load('wx_'+key);
+      if(!Object.keys(mor).length&&!Object.keys(eve).length&&!Object.keys(evt).length) continue;
+      const wd=WEEKDAYS[(date.getDay()+6)%7];
+      const eventsStr=(evt.events||[]).map(e=>`${e.time}:[${(e.symptoms||[]).join(',')}]${e.intensity!==null?'('+e.intensity+')':''} ${e.context||''}`).join('; ');
+      rows.push([key,wd,mor.bedtime||'',mor.waketime||'',mor.sleepDuration||'',mor.sleepQ||'',mor.breakfastMissed||'',mor.energyM??'',(mor.notes||'').replace(/,/g,';'),mor.meds?.elvanse?'Ja':'Nein',mor.elvanseDose||'',mor.meds?.betmiga?'Ja':'Nein',mor.meds?.toviaz?'Ja':'Nein',mor.meds?.carvedilol?'Ja':'Nein',wx.tempMax||'',wx.pressure||'',eve.migraineDay||'',eve.movement||'',eve.movementGood||'',eve.coffee||'',eve.alcohol||'',eve.screentime||'',eve.mood??'',eve.energyE??'',eve.acuteMeds?.includes('domperidon')?'Ja':'',eve.acuteMeds?.includes('ibuprofen')?'Ja':'',eve.ibuprofenDose||'',eve.acuteMeds?.includes('triptan')?'Ja':'',eve.triptanDose||'',eve.acuteMeds?.includes('duofer')?'Ja':'',eve.acuteMeds?.includes('magnesium')?'Ja':'',  (eve.triggers||'').replace(/,/g,';'),(eve.notes||'').replace(/,/g,';'),eventsStr]);
+    }
+  }
+  const csv=rows.map(r=>r.map(v=>`"${v}"`).join(',')).join('\n');
+  const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download='migraene_2026.csv';a.click();
+  URL.revokeObjectURL(url);
+  showToast('⬇️ CSV exportiert!');
+}
+
+// ── SUNDAY BANNER ────────────────────────────────────────
+function checkSundayBanner(){const now=new Date();const b=document.getElementById('sunday-banner');if(b)b.style.display=(now.getDay()===0&&now.getHours()>=18)?'block':'none';}
+
+// ── BP IMPORT ────────────────────────────────────────────
+window.importBPData=function(bpArray){
+  const byDate={};
+  bpArray.forEach(m=>{if(!byDate[m.date])byDate[m.date]=[];byDate[m.date].push({time:m.time,sys:m.sys,dia:m.dia,pulse:m.pulse});});
+  Object.entries(byDate).forEach(([date,list])=>save('bp_'+date,{list}));
+  showToast('💉 Blutdruckdaten importiert!');
+};
+
+// ── EXCEL IMPORT ─────────────────────────────────────────
+(function(){
+  const importedData = {"mor_2026-06-19": {"sleepQuality": "Mittel", "meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": false}, "savedAt": "2026-06-19T08:00:00.000Z", "sleepDuration": "7.0"}, "eve_2026-06-19": {"migraineDay": "Nein", "dizziness": "1", "dayIntensity": "1", "brainFog": "0", "mood": "3", "movement": "Leicht", "screentime": "Mittel", "coffee": "3", "rumination": "Ja", "notes": "guter Tag, nach gestrigem Blödsinn Tag. heute kleine, leichte Bikerunde gemacht vor Akupunktur", "savedAt": "2026-06-19T20:00:00.000Z"}, "mor_2026-06-20": {"sleepQuality": "Schlecht", "meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": false}, "savedAt": "2026-06-20T08:00:00.000Z", "sleepDuration": "7.0"}, "eve_2026-06-20": {"migraineDay": "Ja", "dizziness": "2", "dayIntensity": "0", "brainFog": "0", "mood": "2", "movement": "Nichts", "screentime": "Viel", "coffee": "2", "rumination": "Ja", "acuteMeds": ["schmerzmittel"], "notes": "mega starke KS am Tag; beim Aufstehen und still stehen sehr hoher Puls;", "savedAt": "2026-06-20T20:00:00.000Z"}, "mor_2026-06-21": {"sleepQuality": "Gut", "meds": {"elvanse": false, "betmiga": false, "toviaz": false, "carvedilol": false}, "savedAt": "2026-06-21T08:00:00.000Z", "sleepDuration": "8.0"}, "eve_2026-06-21": {"migraineDay": "Nein", "dizziness": "3", "dayIntensity": "2", "brainFog": "2", "mood": "2", "movement": "Leicht", "screentime": "Wenig", "coffee": "2", "rumination": "Nein", "notes": "Wanderung Tag 2", "savedAt": "2026-06-21T20:00:00.000Z"}, "mor_2026-06-22": {"sleepQuality": "Mittel", "meds": {"elvanse": false, "betmiga": false, "toviaz": false, "carvedilol": false}, "savedAt": "2026-06-22T08:00:00.000Z", "sleepDuration": "8.0"}, "eve_2026-06-22": {"migraineDay": "Nein", "dizziness": "3", "dayIntensity": "2", "brainFog": "3", "mood": "2", "movement": "Leicht", "screentime": "Wenig", "coffee": "2", "rumination": "Nein", "notes": "Wanderung Tag 1", "savedAt": "2026-06-22T20:00:00.000Z"}, "mor_2026-06-23": {"sleepQuality": "Gut", "meds": {"elvanse": false, "betmiga": false, "toviaz": false, "carvedilol": false}, "savedAt": "2026-06-23T08:00:00.000Z", "sleepDuration": "9.0"}, "eve_2026-06-23": {"migraineDay": "Nein", "dizziness": "2", "brainFog": "3", "mood": "1", "movement": "Nichts", "screentime": "Mittel", "coffee": "2", "rumination": "Ja", "notes": "schlechte Stimmung ganzer Tag, nach Velorunde am Abend gerade viel besser.", "savedAt": "2026-06-23T20:00:00.000Z"}, "mor_2026-06-24": {"sleepQuality": "Gut", "meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": false}, "elvanseDose": "Ja 2x 10mg", "savedAt": "2026-06-24T08:00:00.000Z"}, "eve_2026-06-24": {"migraineDay": "Ja", "dizziness": "2", "dayIntensity": "1", "mood": "1", "movement": "Nichts", "screentime": "Mittel", "coffee": "2", "rumination": "Ja", "acuteMeds": ["schmerzmittel"], "notes": "Heftige KS heute! Arzttermine (Stehtest) und neue Termin Neuro endlich!! danach viel bessere Stimmung.", "savedAt": "2026-06-24T20:00:00.000Z"}, "mor_2026-06-25": {"sleepQuality": "Schlecht", "meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": false}, "savedAt": "2026-06-25T08:00:00.000Z", "sleepDuration": "6.0"}, "eve_2026-06-25": {"migraineDay": "Nein", "dizziness": "2", "dayIntensity": "3", "brainFog": "0", "mood": "3", "movement": "Nichts", "screentime": "Wenig", "coffee": "2", "rumination": "Ja", "notes": "Bei Eltern Essen und viel Diskutieren, dann an Höchi Abschlussfest. Zwischenzeitlich sehr starke pots symptome.", "savedAt": "2026-06-25T20:00:00.000Z"}, "mor_2026-06-26": {"sleepQuality": "Schlecht", "meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": false}, "savedAt": "2026-06-26T08:00:00.000Z", "sleepDuration": "7.0"}, "eve_2026-06-26": {"migraineDay": "Nein", "dizziness": "1", "dayIntensity": "3", "brainFog": "0", "mood": "4", "movement": "Leicht", "screentime": "Wenig", "coffee": "2", "rumination": "Ja", "notes": "Limmat mit Sheyla, Foil Boarding.", "savedAt": "2026-06-26T20:00:00.000Z"}, "mor_2026-06-27": {"sleepQuality": "Gut", "meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": false}, "savedAt": "2026-06-27T08:00:00.000Z", "sleepDuration": "6.0"}, "eve_2026-06-27": {"migraineDay": "Nein", "dizziness": "2", "dayIntensity": "1", "brainFog": "2", "mood": "3", "movement": "Nichts", "screentime": "Viel", "coffee": "2", "rumination": "Nein", "notes": "pots symptome mit auffälligem Schwächegefühl in Beinen im Stehen am BHF vor Tanzen. Im Tägipark überfordert und schwindlig. Sehr fatigue. Abend bei Sheyla. Ansonsten guter Tag.", "savedAt": "2026-06-27T20:00:00.000Z"}, "mor_2026-06-28": {"sleepQuality": "Gut", "meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": false}, "savedAt": "2026-06-28T08:00:00.000Z", "sleepDuration": "6.0"}, "eve_2026-06-28": {"migraineDay": "Nein", "dizziness": "1", "dayIntensity": "1", "brainFog": "3", "mood": "3", "movement": "Nichts", "screentime": "Mittel", "coffee": "2", "rumination": "Nein", "notes": "Starke fatigue", "savedAt": "2026-06-28T20:00:00.000Z"}, "mor_2026-06-29": {"sleepQuality": "Gut", "meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": false}, "elvanseDose": "Ja 30+30", "savedAt": "2026-06-29T08:00:00.000Z", "sleepDuration": "6.0"}, "eve_2026-06-29": {"migraineDay": "Nein", "dizziness": "0", "dayIntensity": "0", "brainFog": "2", "mood": "2", "movement": "Nichts", "screentime": "Wenig", "coffee": "2", "rumination": "Nein", "savedAt": "2026-06-29T20:00:00.000Z"}, "mor_2026-06-30": {"sleepQuality": "Gut", "meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": false}, "savedAt": "2026-06-30T08:00:00.000Z", "sleepDuration": "7.0"}, "eve_2026-06-30": {"migraineDay": "Nein", "dizziness": "0", "dayIntensity": "1", "mood": "1", "movement": "Leicht", "screentime": "Wenig", "coffee": "2", "rumination": "Nein", "notes": "40mg und 20mg (Stimmung depressiv); Badi Tiefenbrunnen; Tanzen sehr intensiv KS nach Training; extrem viel geschwitzt; Bouillon zuhause getrunken", "savedAt": "2026-06-30T20:00:00.000Z"}, "mor_2026-07-01": {"sleepQuality": "Gut", "meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": false}, "savedAt": "2026-07-01T08:00:00.000Z", "sleepDuration": "8.0"}, "eve_2026-07-01": {"migraineDay": "Ja", "dizziness": "3", "dayIntensity": "1", "brainFog": "1", "mood": "3", "movement": "Nichts", "screentime": "Mittel", "coffee": "2", "rumination": "Nein", "acuteMeds": ["schmerzmittel"], "notes": "Schwindel und Geräuschempfindlichkeit Mittag, Triptan genommen Wirkung nicht sonderlich gut (eher Pots?), akupunktur (erstes Mal voll eingeschlafen), mit Ari Halo Halle 3 Stunden, Abend zu viel Handy", "savedAt": "2026-07-01T20:00:00.000Z"}, "mor_2026-07-02": {"sleepQuality": "Gut", "meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": false}, "savedAt": "2026-07-02T08:00:00.000Z", "sleepDuration": "8.0"}, "eve_2026-07-02": {"migraineDay": "Nein", "dizziness": "1", "dayIntensity": "2", "brainFog": "0", "mood": "2", "movement": "Nichts", "screentime": "Wenig", "coffee": "2", "rumination": "Nein", "notes": "mami papi ässe iglade,therapie, grillnchill, am Abend langsam Kopfschmerzen und sehr müde", "savedAt": "2026-07-02T20:00:00.000Z"}, "mor_2026-07-03": {"sleepQuality": "Gut", "meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": false}, "savedAt": "2026-07-03T08:00:00.000Z", "sleepDuration": "8.0"}, "eve_2026-07-03": {"migraineDay": "Ja", "dizziness": "2", "dayIntensity": "1", "brainFog": "2", "mood": "1", "movement": "Nichts", "screentime": "Mittel", "coffee": "2", "rumination": "Nein", "notes": "interner Stress führt gleich zu Schwindel, Stimmung tief, Mittagessen halb ausgelassen, KS gegen Abend, extrem Müde und demotiviert/fatigue am Abend", "savedAt": "2026-07-03T20:00:00.000Z"}, "mor_2026-07-04": {"sleepQuality": "Gut", "meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": false}, "savedAt": "2026-07-04T08:00:00.000Z", "sleepDuration": "9.0"}, "eve_2026-07-04": {"migraineDay": "Ja", "dizziness": "3", "dayIntensity": "0", "brainFog": "2", "mood": "1", "movement": "Nichts", "screentime": "Viel", "coffee": "2", "rumination": "Ja", "acuteMeds": ["schmerzmittel"], "notes": "extrem unguter Morgen, starke Symptome mit Reizempfindlichkeit, meist nur liegen, Kaffi mit Ari ok, zuhause um 4 Uhr besser, konnte Wähe machen, dann sehr müde und schnell erschöpft", "savedAt": "2026-07-04T20:00:00.000Z"}, "mor_2026-07-05": {"sleepQuality": "Mittel", "meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": false}, "savedAt": "2026-07-05T08:00:00.000Z", "sleepDuration": "6.0"}, "eve_2026-07-05": {"migraineDay": "Nein", "dizziness": "2", "dayIntensity": "3", "brainFog": "2", "mood": "3", "movement": "Leicht", "screentime": "Wenig", "coffee": "2", "notes": "bouldern murgtal", "savedAt": "2026-07-05T20:00:00.000Z"}, "mor_2026-07-06": {"sleepQuality": "Gut", "meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": false}, "savedAt": "2026-07-06T08:00:00.000Z", "sleepDuration": "8.0"}, "eve_2026-07-06": {"migraineDay": "Ja", "dizziness": "3", "brainFog": "3", "mood": "2", "movement": "Nichts", "screentime": "Wenig", "coffee": "2", "acuteMeds": ["schmerzmittel"], "notes": "Start Ferien, keine 20mg Dosis Mittag, Schlafen im Zug, Hitze war anstrengend, sonst okay, sehr müde", "savedAt": "2026-07-06T20:00:00.000Z"}, "mor_2026-07-07": {"sleepQuality": "Gut", "meds": {"elvanse": false, "betmiga": false, "toviaz": false, "carvedilol": false}, "savedAt": "2026-07-07T08:00:00.000Z", "sleepDuration": "10.0"}, "eve_2026-07-07": {"migraineDay": "Ja", "dizziness": "4", "dayIntensity": "1", "brainFog": "4", "mood": "0", "movement": "Nichts", "screentime": "Wenig", "coffee": "3", "rumination": "Nein", "acuteMeds": ["schmerzmittel"], "notes": "ganzer Tag extrem erschöpft und Schwindel, triptan am morgen naja, noch nie so schlimm ganzerTag, Zugfahrt horror, Busalla schlafen am Tag, keine Kraft!", "savedAt": "2026-07-07T20:00:00.000Z"}, "mor_2026-07-08": {"sleepQuality": "Gut", "meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": false}, "savedAt": "2026-07-08T08:00:00.000Z", "sleepDuration": "9.0"}, "eve_2026-07-08": {"migraineDay": "Nein", "dizziness": "3", "dayIntensity": "1", "brainFog": "2", "mood": "3", "movement": "Leicht", "screentime": "Mittel", "coffee": "2", "rumination": "Nein", "notes": "Morgen extrem erschöpft, elvanse genommen wurde besser, 20mg Dosis in 3Teilen genommen, kleine Wanderung zu See", "savedAt": "2026-07-08T20:00:00.000Z"}, "mor_2026-07-09": {"sleepQuality": "Mittel", "meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": false}, "savedAt": "2026-07-09T08:00:00.000Z", "sleepDuration": "8.0"}, "eve_2026-07-09": {"migraineDay": "Nein", "dizziness": "1", "dayIntensity": "1", "brainFog": "1", "mood": "3", "movement": "Nichts", "screentime": "Mittel", "coffee": "2", "rumination": "Nein", "notes": "Genua Tagesausflug, Strand, Schnorcheln, Buch lesen, sehr cool!", "savedAt": "2026-07-09T20:00:00.000Z"}, "mor_2026-07-10": {"sleepQuality": "Mittel", "meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": false}, "savedAt": "2026-07-10T08:00:00.000Z", "sleepDuration": "7.0"}, "eve_2026-07-10": {"migraineDay": "Ja", "dizziness": "3", "dayIntensity": "2", "brainFog": "2", "mood": "3", "movement": "Nichts", "screentime": "Wenig", "coffee": "2", "rumination": "Nein", "acuteMeds": ["schmerzmittel"], "notes": "nach Mitternacht ins Bett, nicht so guter Schlaf", "savedAt": "2026-07-10T20:00:00.000Z"}, "mor_2026-07-11": {"meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": false}, "savedAt": "2026-07-11T08:00:00.000Z"}, "eve_2026-07-11": {"migraineDay": "Ja", "acuteMeds": ["schmerzmittel"], "notes": "Migräne mit Aura um 16.30 Uhr. 2 Triptane. Wie gelähmt, musste brown noise machen", "savedAt": "2026-07-11T20:00:00.000Z"}, "mor_2026-07-12": {"meds": {"elvanse": false, "betmiga": false, "toviaz": false, "carvedilol": false}, "savedAt": "2026-07-12T08:00:00.000Z"}, "eve_2026-07-12": {"migraineDay": "Nein", "notes": "Fähre nach Bastia, Müdigkeit und etwas KS nach Migräne Tag", "savedAt": "2026-07-12T20:00:00.000Z"}, "mor_2026-07-13": {"meds": {"elvanse": false, "betmiga": false, "toviaz": false, "carvedilol": false}, "savedAt": "2026-07-13T08:00:00.000Z"}, "eve_2026-07-13": {"migraineDay": "Nein", "notes": "mit 50cc Moriani Beach, gut :)", "savedAt": "2026-07-13T20:00:00.000Z"}, "mor_2026-07-14": {"sleepQuality": "Gut", "meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": false}, "savedAt": "2026-07-14T08:00:00.000Z", "sleepDuration": "8.0"}, "eve_2026-07-14": {"migraineDay": "Nein", "dizziness": "0", "dayIntensity": "3", "brainFog": "0", "mood": "4", "movement": "Leicht", "screentime": "Wenig", "coffee": "2", "rumination": "Nein", "notes": "Boot Tag, sehr gut!", "savedAt": "2026-07-14T20:00:00.000Z"}, "mor_2026-07-15": {"meds": {"elvanse": false, "betmiga": false, "toviaz": false, "carvedilol": false}, "savedAt": "2026-07-15T08:00:00.000Z"}, "eve_2026-07-15": {"migraineDay": "Nein", "notes": "Scooter, Wanderung zum Wasserfall, Cliffjumping, Strand. Guter Tag!", "savedAt": "2026-07-15T20:00:00.000Z"}, "mor_2026-07-16": {"sleepQuality": "Schlecht", "meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": false}, "savedAt": "2026-07-16T08:00:00.000Z", "sleepDuration": "7.0"}, "eve_2026-07-16": {"migraineDay": "Ja", "dizziness": "2", "dayIntensity": "0", "brainFog": "2", "mood": "2", "movement": "Nichts", "screentime": "Mittel", "coffee": "2", "acuteMeds": ["schmerzmittel"], "notes": "Scooterfahrt nach 20min abgebrochen wegen Schwindel, Migräne Verdacht", "savedAt": "2026-07-16T20:00:00.000Z"}, "mor_2026-07-17": {"meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": false}, "savedAt": "2026-07-17T08:00:00.000Z"}, "eve_2026-07-17": {"migraineDay": "Ja", "dizziness": "2", "dayIntensity": "0", "brainFog": "2", "movement": "Nichts", "coffee": "2", "acuteMeds": ["schmerzmittel"], "notes": "auch wieder nicht möglich lange Strecke, 2 Ibus nicht genug geholfen", "savedAt": "2026-07-17T20:00:00.000Z"}, "mor_2026-07-18": {"meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": false}, "savedAt": "2026-07-18T08:00:00.000Z"}, "eve_2026-07-18": {"migraineDay": "Nein", "movement": "Nichts", "notes": "Zugfahrt nach Ajaccio, eigentlich ziemlich okay", "savedAt": "2026-07-18T20:00:00.000Z"}, "mor_2026-07-19": {"meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": false}, "savedAt": "2026-07-19T08:00:00.000Z"}, "eve_2026-07-19": {"migraineDay": "Nein", "movement": "Nichts", "notes": "einsamer Strand, war alles gut", "savedAt": "2026-07-19T20:00:00.000Z"}, "mor_2026-07-20": {"meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": false}, "savedAt": "2026-07-20T08:00:00.000Z"}, "eve_2026-07-20": {"migraineDay": "Nein", "movement": "Nichts", "notes": "Treffen an Strand, Schwindel hielt sich in Grenzen", "savedAt": "2026-07-20T20:00:00.000Z"}, "mor_2026-07-21": {"meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": false}, "savedAt": "2026-07-21T08:00:00.000Z"}, "eve_2026-07-21": {"migraineDay": "Nein", "movement": "Nichts", "notes": "letzter Tag Korsika, auf Fähre lange gestanden, Druck im Kopf, Nackenschmerz", "savedAt": "2026-07-21T20:00:00.000Z"}, "mor_2026-07-22": {"meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": false}, "savedAt": "2026-07-22T08:00:00.000Z"}, "eve_2026-07-22": {"migraineDay": "Nein", "movement": "Nichts", "notes": "Reisetag, pretty okay", "savedAt": "2026-07-22T20:00:00.000Z"}, "mor_2026-07-23": {"sleepQuality": "Gut", "meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": false}, "savedAt": "2026-07-23T08:00:00.000Z", "sleepDuration": "9.0"}, "eve_2026-07-23": {"migraineDay": "Ja", "mood": "3", "movement": "Nichts", "screentime": "Mittel", "coffee": "3", "acuteMeds": ["schmerzmittel"], "notes": "hyperaktiv, Unruhe und Nackenverspannung als Vorbote, starke POTS Symptome, KS um ca. 11 Uhr", "savedAt": "2026-07-23T20:00:00.000Z"}, "mor_2026-07-24": {"sleepQuality": "Gut", "meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": false}, "savedAt": "2026-07-24T08:00:00.000Z", "sleepDuration": "9.0"}, "eve_2026-07-24": {"migraineDay": "Nein", "dayIntensity": "1", "brainFog": "0", "mood": "3", "movement": "Leicht", "screentime": "Wenig", "coffee": "3", "rumination": "Nein", "notes": "morgen POTS, Tennis am Nachmittag, starker Schwindel gegen Schluss, KS gegen Abend", "savedAt": "2026-07-24T20:00:00.000Z"}, "mor_2026-07-25": {"sleepQuality": "Gut", "meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": false}, "savedAt": "2026-07-25T08:00:00.000Z", "sleepDuration": "8.0"}, "eve_2026-07-25": {"migraineDay": "Nein", "dayIntensity": "0", "brainFog": "2", "movement": "Nichts", "coffee": "2", "notes": "keine Nachmittag Dosis Elvanse - sehr müde", "savedAt": "2026-07-25T20:00:00.000Z"}, "mor_2026-07-26": {"sleepQuality": "Schlecht", "meds": {"elvanse": false, "betmiga": false, "toviaz": false, "carvedilol": false}, "savedAt": "2026-07-26T08:00:00.000Z", "sleepDuration": "7.0"}, "eve_2026-07-26": {"alcohol": "Mittel", "notes": "Basel mit Freunden / zwei Bier getrunken", "savedAt": "2026-07-26T20:00:00.000Z"}, "mor_2026-07-27": {"meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": true}, "savedAt": "2026-07-27T08:00:00.000Z"}, "eve_2026-07-27": {"migraineDay": "Ja", "movement": "Leicht", "notes": "Bike Altberg Downhill / nicht fit, viele Pausen / Kardiologie", "savedAt": "2026-07-27T20:00:00.000Z"}, "mor_2026-07-28": {"meds": {"elvanse": false, "betmiga": false, "toviaz": false, "carvedilol": false}, "savedAt": "2026-07-28T08:00:00.000Z"}, "eve_2026-07-28": {"notes": "starke emotionale Reaktion nach schwierigem Gespräch", "savedAt": "2026-07-28T20:00:00.000Z"}, "mor_2026-07-29": {"sleepQuality": "Mittel", "meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": true}, "savedAt": "2026-07-29T08:00:00.000Z", "sleepDuration": "7.0"}, "eve_2026-07-29": {"migraineDay": "Ja", "dizziness": "3", "dayIntensity": "3", "brainFog": "1", "movement": "Nichts", "screentime": "Wenig", "coffee": "3", "alcohol": "Wenig", "acuteMeds": ["schmerzmittel"], "notes": "Schwindelattacke bei Wäsche rausnehmen. IBU nach Urologie. Abend bei Freunden / 1 Bier", "savedAt": "2026-07-29T20:00:00.000Z"}, "mor_2026-07-30": {"sleepQuality": "Schlecht", "meds": {"elvanse": true, "betmiga": true, "toviaz": false, "carvedilol": true}, "savedAt": "2026-07-30T08:00:00.000Z", "sleepDuration": "8.0"}, "eve_2026-07-30": {"migraineDay": "Ja", "dayIntensity": "0", "movement": "Nichts", "screentime": "Mittel", "coffee": "2", "alcohol": "Wenig", "acuteMeds": ["schmerzmittel"], "notes": "Kopfschmerzen am morgen, Schwindelattacken, spüre Alkohol vom Vortag, ganzer Tag gelegen", "savedAt": "2026-07-30T20:00:00.000Z"}, "mor_2026-07-31": {"sleepQuality": "Gut", "meds": {"elvanse": true, "betmiga": true, "toviaz": true, "carvedilol": true}, "elvanseDose": "60mg", "savedAt": "2026-07-31T08:00:00.000Z", "sleepDuration": "8.0"}, "eve_2026-07-31": {"migraineDay": "Ja", "dizziness": "3", "dayIntensity": "0", "brainFog": "2", "mood": "1", "movement": "Nichts", "screentime": "Mittel", "coffee": "1", "rumination": "Nein", "notes": "Heftige KS am Morgen, Steifer Nacken, krasser Schwindel nach Akupunktur, Ibu und Triptan, Puls geht nicht unter 70 auch im Liegen", "savedAt": "2026-07-31T20:00:00.000Z"}, "mor_2026-08-01": {"sleepQuality": "Mittel", "meds": {"elvanse": false, "betmiga": false, "toviaz": false, "carvedilol": false}, "savedAt": "2026-08-01T08:00:00.000Z", "sleepDuration": "8.0"}, "eve_2026-08-01": {"migraineDay": "Nein", "notes": "Puls 160 bei leichtem Hochfahren mit Velo. 1. August bei Freunden bis 1 Uhr.", "savedAt": "2026-08-01T20:00:00.000Z"}, "mor_2026-08-02": {"sleepQuality": "Mittel", "meds": {"elvanse": false, "betmiga": false, "toviaz": false, "carvedilol": false}, "savedAt": "2026-08-02T08:00:00.000Z", "sleepDuration": "8.0"}, "eve_2026-08-02": {"notes": "1 Uhr bis 9 Uhr geschlafen", "savedAt": "2026-08-02T20:00:00.000Z"}};
+  const ver='v3_new';
+  if(!localStorage.getItem('excel_import_'+ver)){
+    Object.entries(importedData).forEach(([k,v])=>{if(!localStorage.getItem(k))localStorage.setItem(k,JSON.stringify(v));});
+    localStorage.setItem('excel_import_'+ver,'1');
+  }
+})();
+
+// ── INIT ─────────────────────────────────────────────────
+(function(){
+  for(let i=0;i<localStorage.length;i++){
+    const k=localStorage.key(i);
+    if(k&&(k.startsWith('mor_')||k.startsWith('eve_')||k.startsWith('evt_')||k.startsWith('bp_')||k.startsWith('wx_'))){
+      try{memCache[k]=JSON.parse(localStorage.getItem(k));}catch(e){}
+    }
+  }
+})();
+updateDateLabel();
+switchTab('morning');
+checkSundayBanner();
+setInterval(checkSundayBanner,3600000);
+window.addEventListener('load',()=>{if(typeof google!=='undefined'){initGoogleAuth();}});
+</script>
+</body>
+</html>
