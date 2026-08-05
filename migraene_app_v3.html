@@ -758,9 +758,11 @@ async function loadAllWeather() {
     else if(bar) bar.innerHTML='<span class="weather-info">Geladen ✓</span><button class="weather-load-btn" onclick="loadWeather()">↻</button>';
   } catch(e) {
     if(bar) bar.innerHTML='<span style="color:var(--red);font-size:12px;">Fehler beim Laden</span><button class="weather-load-btn" onclick="loadWeather()">↻</button>';
-    console.error(e);
+console.error(e);
   }
 }
+
+function wxCodeToIcon(code) {
   if(code===0) return '☀️';
   if(code<=3) return '⛅';
   if(code<=48) return '🌫️';
