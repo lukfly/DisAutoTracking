@@ -759,6 +759,8 @@ async function loadAllWeather() {
     console.error(e);
   }
 }
+
+function wxCodeToIcon(code) {
   if(code===0) return '☀️';
   if(code<=3) return '⛅';
   if(code<=48) return '🌫️';
