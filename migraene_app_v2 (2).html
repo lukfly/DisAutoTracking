@@ -45,8 +45,8 @@ body { background:var(--bg); color:var(--text); font-family:-apple-system,BlinkM
 .tab-btn.active-calendar { border-color:var(--migraine); color:var(--migraine); background:var(--migraine-soft); }
 
 /* VIEWS */
-.view { display:none; padding:16px; }
-.view.active { display:block; }
+.view { display:none !important; padding:16px; }
+.view.active { display:block !important; }
 
 /* SECTION */
 .section { background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); padding:16px; margin-bottom:12px; }
@@ -393,6 +393,12 @@ body { background:var(--bg); color:var(--text); font-family:-apple-system,BlinkM
 <!-- ===== ABEND ===== -->
 <div class="view" id="view-evening">
 
+  <!-- Morgen-Notizen als Referenz -->
+  <div class="section" id="morning-ref-section" style="display:none;">
+    <div class="section-title mc" style="margin-bottom:8px;">☀️ Morgen-Notizen (zur Referenz)</div>
+    <div id="morning-ref-text" style="font-size:14px;color:var(--text-dim);font-style:italic;"></div>
+  </div>
+
   <div class="section">
     <div class="section-title ec">Migräne-Tag?</div>
     <div class="segment s2">
@@ -721,16 +727,17 @@ function wxCodeToIcon(code) {
 
 function renderWeather(wx) {
   const bar=document.getElementById('weather-bar');
+  if(!bar) return;
   const icon=wxCodeToIcon(wx.code||0);
   const pressureAlert=wx.pressure&&(wx.pressure<980||wx.pressure>1030);
   bar.innerHTML=`
     <div>
       <div style="font-size:16px;">${icon} ${wx.tempMin??'?'}–${wx.tempMax??'?'}°C</div>
-      <div style="font-size:11px;color:var(--text-dim);">Niederschlag: ${wx.precip??'?'}mm · Luftdruck: ${wx.pressure??'?'}hPa ${pressureAlert?'⚠️':''}</div>
+      <div style="font-size:11px;color:var(--text-dim);">Niederschlag: ${wx.precip??'?'}mm · Luftdruck: ${wx.pressure??'?'}hPa${pressureAlert?' ⚠️':''}</div>
+      ${pressureAlert?'<div style="color:var(--red);font-size:11px;font-weight:700;margin-top:3px;">⚠️ Auffälliger Luftdruck</div>':''}
     </div>
     <button class="weather-load-btn" onclick="loadWeather()">↻</button>
   `;
-  if(pressureAlert) bar.innerHTML+='<div class="weather-alert" style="font-size:11px;margin-top:4px;">⚠️ Auffälliger Luftdruck</div>';
 }
 
 // ── TABS ─────────────────────────────────────────────────
@@ -994,12 +1001,25 @@ function loadMorning(){
   if(d.notes) document.getElementById('morning-notes').value=d.notes;
   if(d.meds){['elvanse','betmiga','toviaz','carvedilol'].forEach(m=>{if(d.meds[m]===false)document.getElementById('med-'+m).classList.remove('on');});}
   renderBP('bp-morning-list');
-  // Auto-load weather
+  // Reset weather bar for this day
+  const bar=document.getElementById('weather-bar');
+  if(bar) bar.innerHTML=`<span class="weather-info" id="weather-info">Noch nicht geladen</span><button class="weather-load-btn" onclick="loadWeather()">🌤️ Laden</button>`;
+  // Auto-load weather if already cached for this day
   const wx=load('wx_'+dateKey(currentDate));
-  if(wx&&wx.temp!==undefined) renderWeather(wx);
+  if(wx&&wx.tempMax!==undefined) renderWeather(wx);
 }
 
 function loadEvening(){
+  // Show morning notes as reference
+  const morData=load(mKey(currentDate));
+  const refSection=document.getElementById('morning-ref-section');
+  const refText=document.getElementById('morning-ref-text');
+  if(morData.notes&&morData.notes.trim()){
+    refSection.style.display='block';
+    refText.textContent=morData.notes;
+  } else {
+    refSection.style.display='none';
+  }
   const d=load(eKey(currentDate));
   const eveFields=['migraineDay','movement','movementGood','social','socialGood','emotionalEvent','coffee','alcohol','screentime','mood','energyE','triptanDose'];
   eveFields.forEach(f=>document.querySelectorAll(`[data-f="${f}"]`).forEach(b=>b.classList.remove('sel-m','sel-e','sel-ev','sel-g','sel-r')));
