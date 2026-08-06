@@ -951,65 +951,56 @@ function renderEventList(){
 
 // ── DIKTIERFUNKTION ──────────────────────────────────────
 let recognition=null;
+let dictationBuffer='';
+
 function startDictation(){
   const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
-  if(!SpeechRecognition){showToast('Diktierfunktion nicht verfügbar in diesem Browser');return;}
+  if(!SpeechRecognition){showToast('Diktierfunktion nicht verfügbar');return;}
   const btn=document.getElementById('dictate-btn');
   const status=document.getElementById('dictate-status');
   const textArea=document.getElementById('event-context');
-  // Stop if already recording
   if(recognition&&recognition._active){
-    recognition.stop();
     recognition._active=false;
+    recognition.stop();
     btn.classList.remove('recording');
     btn.textContent='🎤 Diktieren';
     status.textContent='';
+    dictationBuffer='';
     return;
   }
-  recognition=new SpeechRecognition();
-  recognition.lang='de-DE';
-  recognition.continuous=true;
-  recognition.interimResults=true;
-  recognition._active=true;
-  // Remember text that was already in the field before dictation started
-  const existingText=textArea.value;
+  dictationBuffer=textArea.value.trim();
+  if(dictationBuffer) dictationBuffer+=' ';
+  function startSession(){
+    if(!recognition||!recognition._active) return;
+    const r=new SpeechRecognition();
+    r.lang='de-DE';
+    r.continuous=false;
+    r.interimResults=false;
+    r._active=true;
+    recognition=r;
+    r.onresult=(e)=>{
+      const transcript=e.results[0][0].transcript.trim();
+      if(transcript){
+        dictationBuffer+=transcript+' ';
+        textArea.value=dictationBuffer;
+        detectSymptomsFromText(transcript);
+        status.textContent='✓ ...'+dictationBuffer.slice(-50);
+      }
+    };
+    r.onerror=(e)=>{
+      if(e.error==='no-speech'){setTimeout(()=>startSession(),100);}
+      else if(e.error!=='aborted'){status.textContent='Fehler: '+e.error;}
+    };
+    r.onend=()=>{
+      if(recognition&&recognition._active){setTimeout(()=>startSession(),100);}
+    };
+    r.start();
+  }
+  recognition={_active:true};
   btn.classList.add('recording');
   btn.textContent='🔴 Stop';
-  status.textContent='Sprich jetzt — tippe Stop wenn fertig';
-  recognition.onresult=(e)=>{
-    // Build transcript cleanly from all results from index 0
-    let finalTranscript='';
-    let interimTranscript='';
-    for(let i=0;i<e.results.length;i++){
-      if(e.results[i].isFinal){
-        finalTranscript+=e.results[i][0].transcript+' ';
-      } else {
-        interimTranscript+=e.results[i][0].transcript;
-      }
-    }
-    // Combine existing text + new final + interim (no duplication)
-    textArea.value=existingText+(existingText&&finalTranscript?' ':'')+finalTranscript+interimTranscript;
-    // Auto-detect symptoms from final parts only
-    if(finalTranscript) detectSymptomsFromText(finalTranscript);
-    status.textContent='🎤 '+finalTranscript.substring(Math.max(0,finalTranscript.length-50));
-  };
-  recognition.onerror=(e)=>{
-    if(e.error!=='aborted'){status.textContent='Fehler: '+e.error;}
-  };
-  recognition.onend=()=>{
-    if(recognition._active){
-      try{recognition.start();}catch(err){
-        recognition._active=false;
-        btn.classList.remove('recording');
-        btn.textContent='🎤 Diktieren';
-      }
-    } else {
-      btn.classList.remove('recording');
-      btn.textContent='🎤 Diktieren';
-      setTimeout(()=>{status.textContent='';},3000);
-    }
-  };
-  recognition.start();
+  status.textContent='Sprich — tippe Stop wenn fertig';
+  startSession();
 }
 
 const SYMPTOM_KEYWORDS={
