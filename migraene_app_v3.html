@@ -570,6 +570,11 @@ body { background:var(--bg); color:var(--text); font-family:-apple-system,BlinkM
   </div>
   <div id="calendar-grid"></div>
   <button onclick="exportCSV()" style="width:100%;padding:12px;border-radius:var(--radius);border:1.5px solid var(--border);background:var(--bg3);color:var(--text-dim);font-size:14px;font-weight:600;cursor:pointer;margin-top:14px;">⬇️ CSV exportieren</button>
+  <div style="margin-top:20px; padding-top:14px; border-top:1px solid var(--border);">
+    <div class="section-title">Daten Import</div>
+    <input type="file" id="bp-csv-input" accept=".csv" style="display:none" onchange="processBPCsv(event)">
+    <button onclick="document.getElementById('bp-csv-input').click()" style="width:100%;padding:12px;border-radius:var(--radius);border:1.5px dashed var(--morning);background:var(--morning-soft);color:var(--morning);font-size:14px;font-weight:600;cursor:pointer;">💉 HealthForYou CSV importieren</button>
+  </div>
 </div>
 
 <!-- MODAL -->
@@ -1119,7 +1124,16 @@ function renderBP(id){
   const c=document.getElementById(id);if(!c)return;
   const m=load(bpKey(currentDate));
   if(!m.list||!m.list.length){c.innerHTML='<div class="bp-empty">Keine Messungen für diesen Tag.</div>';return;}
-  c.innerHTML=m.list.map(x=>{const h=parseInt(x.sys)>135||parseInt(x.dia)>100;return`<div class="bp-entry"><div><div class="bp-val ${h?'high':''}">${x.sys}/${x.dia} mmHg${h?' ⚠️':''}</div>${x.pulse?`<div class="bp-time">Puls: ${x.pulse} bpm</div>`:''}</div><div class="bp-time">${x.time||''}</div></div>`;}).join('');
+  c.innerHTML=m.list.map(x=>{
+    const h=parseInt(x.sys)>135||parseInt(x.dia)>100;
+    return `<div class="bp-entry" style="flex-direction:column; align-items:flex-start; gap:4px;">
+      <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
+        <div><div class="bp-val ${h?'high':''}">${x.sys}/${x.dia} mmHg${h?' ⚠️':''}</div>${x.pulse?`<div class="bp-time">Puls: ${x.pulse} bpm</div>`:''}</div>
+        <div class="bp-time">${x.time||''}</div>
+      </div>
+      ${x.note ? `<div style="font-size:12px; color:var(--text-dim); margin-top:4px; font-style:italic;">📝 ${x.note}</div>` : ''}
+    </div>`;
+  }).join('');
 }
 
 // ── CALENDAR ─────────────────────────────────────────────
@@ -1249,12 +1263,123 @@ function exportCSV(){
 // ── SUNDAY BANNER ────────────────────────────────────────
 function checkSundayBanner(){const now=new Date();const b=document.getElementById('sunday-banner');if(b)b.style.display=(now.getDay()===0&&now.getHours()>=18)?'block':'none';}
 
-// ── BP IMPORT ────────────────────────────────────────────
-window.importBPData=function(bpArray){
-  const byDate={};
-  bpArray.forEach(m=>{if(!byDate[m.date])byDate[m.date]=[];byDate[m.date].push({time:m.time,sys:m.sys,dia:m.dia,pulse:m.pulse});});
-  Object.entries(byDate).forEach(([date,list])=>save('bp_'+date,{list}));
-  showToast('💉 Blutdruckdaten importiert!');
+// ── BP CSV DATEI UPLOAD ──────────────────────────────────
+function processBPCsv(e) {
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  
+  reader.onload = function(evt) {
+    const text = evt.target.result;
+    const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    if(lines.length < 2) { showToast('CSV ist leer oder ungültig'); return; }
+    
+    let headerLineIdx = -1;
+    for(let i=0; i<lines.length; i++) {
+      const lower = lines[i].toLowerCase();
+      if(lower.includes('sys') && lower.includes('dia') && (lower.includes('date') || lower.includes('datum'))) {
+        headerLineIdx = i;
+        break;
+      }
+    }
+
+    if(headerLineIdx === -1) {
+      alert('Konnte die Spalten in der CSV nicht erkennen. Bitte prüfe das Format.');
+      return;
+    }
+
+    const headerLine = lines[headerLineIdx].toLowerCase();
+    const sep = headerLine.includes(';') ? ';' : ',';
+    const headers = headerLine.split(sep).map(h => h.replace(/"/g, '').trim());
+    
+    const idxDate = headers.findIndex(h => h.includes('date') || h.includes('datum'));
+    const idxTime = headers.findIndex(h => h.includes('time') || h.includes('uhr') || h.includes('zeit'));
+    const idxSys = headers.findIndex(h => h.includes('sys'));
+    const idxDia = headers.findIndex(h => h.includes('dia'));
+    const idxPul = headers.findIndex(h => h.includes('pul') || h.includes('puls'));
+    const idxNote = headers.findIndex(h => h.includes('notiz') || h.includes('note') || h.includes('kontext'));
+
+    const bpArray = [];
+    for(let i = headerLineIdx + 1; i < lines.length; i++) {
+      const cols = lines[i].split(sep).map(c => c.replace(/"/g, '').trim());
+      if(cols.length < 3) continue;
+      
+      let rawDate = cols[idxDate];
+      if(!rawDate) continue;
+      let parsedDate = rawDate; 
+      if(rawDate.includes('.')) {
+        const parts = rawDate.split('.');
+        if(parts.length === 3) parsedDate = `${parts[2]}-${parts[1].padStart(2,'0')}-${parts[0].padStart(2,'0')}`;
+      }
+      
+      let sysVal = parseInt(cols[idxSys]);
+      let diaVal = idxDia !== -1 ? parseInt(cols[idxDia]) : null;
+      let pulVal = idxPul !== -1 ? parseInt(cols[idxPul]) : null;
+      let noteVal = (idxNote !== -1 && cols[idxNote]) ? cols[idxNote] : '';
+      
+      let timeVal = idxTime !== -1 ? cols[idxTime] : '12:00';
+      const timeLower = timeVal.toLowerCase();
+      if(timeLower.includes('am') || timeLower.includes('pm')) {
+          let isPM = timeLower.includes('pm');
+          let tClean = timeLower.replace('am', '').replace('pm', '').trim();
+          let parts = tClean.split(':');
+          if(parts.length >= 2) {
+              let h = parseInt(parts[0]);
+              let m = parts[1];
+              if(isPM && h < 12) h += 12;
+              if(!isPM && h === 12) h = 0;
+              timeVal = String(h).padStart(2, '0') + ':' + m;
+          }
+      }
+
+      if(sysVal && !isNaN(sysVal)) {
+        bpArray.push({date: parsedDate, time: timeVal, sys: sysVal, dia: diaVal, pulse: pulVal, note: noteVal});
+      }
+    }
+
+    if(bpArray.length > 0) {
+      window.importBPData(bpArray);
+      if(typeof loadDayData === 'function' && (currentTab === 'morning' || currentTab === 'evening')) loadDayData();
+      if(typeof renderCalendar === 'function' && currentTab === 'calendar') renderCalendar();
+    } else {
+      showToast('Keine gültigen Blutdruckdaten gefunden.');
+    }
+    
+    e.target.value = ''; 
+  };
+  reader.readAsText(file);
+}
+
+// ── BP IMPORT (MIT MERGE/UPDATE LOGIK) ───────────────────
+window.importBPData = function(bpArray) {
+  const byDate = {};
+  bpArray.forEach(m => {
+    if(!byDate[m.date]) byDate[m.date] = [];
+    byDate[m.date].push(m);
+  });
+  
+  Object.entries(byDate).forEach(([date, newList]) => {
+    const key = 'bp_' + date;
+    const existing = load(key);
+    let currentList = existing.list || [];
+    
+    // Merge: Wenn gleiche Uhrzeit existiert, überschreiben. Wenn nicht, anhängen.
+    newList.forEach(newItem => {
+      const idx = currentList.findIndex(x => x.time === newItem.time);
+      if(idx !== -1) {
+        currentList[idx] = newItem; // Update (nimmt neue Notizen auf)
+      } else {
+        currentList.push(newItem); // Neu anlegen
+      }
+    });
+    
+    // Nach Uhrzeit sortieren
+    currentList.sort((a,b) => a.time.localeCompare(b.time));
+    
+    save(key, { list: currentList });
+  });
+  
+  showToast('💉 Blutdruckdaten importiert & aktualisiert!');
 };
 
 // ── EXCEL IMPORT ─────────────────────────────────────────
