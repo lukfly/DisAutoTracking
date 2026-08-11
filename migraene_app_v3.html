@@ -1244,15 +1244,21 @@ function openModal(date,mor,eve,bp,evt){
     if(eve.triggers) html+=row('Auslöser',eve.triggers);
     if(eve.notes) html+=row('Tagesnotiz',eve.notes);
   }
- if(bp.list&&bp.list.length){
-    html+='<div class="modal-sec">💉 Blutdruck</div>';
-    bp.list.forEach(x=>{
-      const h=parseInt(x.sys)>135||parseInt(x.dia)>100;
+ if(bp.list && bp.list.length){
+    html += '<div class="modal-sec">💉 Blutdruck</div>';
+    bp.list.forEach(x => {
+      const h = parseInt(x.sys) > 135 || parseInt(x.dia) > 100;
+      const noteText = x.note || x.notiz || ''; // Fängt beide Varianten (note/notiz) ab
       
-      // Hier bauen wir den klickbaren Bereich mit Notiz ein:
-      const notizAttr = x.notiz && x.notiz.trim() !== '' ? `onclick="showNoteModal('Messung um ${x.time || '—'} Uhr', '📝 <strong>Notiz:</strong><br>${x.notiz.replace(/'/g, "\\'")}')" style="cursor:pointer;" title="Klicken für Notiz"` : '';
-      
-      html+= `<div ${notizAttr}>` + row(x.time||'—',`${x.sys}/${x.dia} mmHg${x.pulse?' · '+x.pulse+' bpm':''}${h?' ⚠️':''}`,h?'color:var(--red)':'') + `</div>`;
+      html += `
+        <div style="padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.1);">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="${h ? 'color:var(--red); font-weight:bold;' : ''}">${x.sys}/${x.dia} mmHg${x.pulse ? ' · ' + x.pulse + ' bpm' : ''}${h ? ' ⚠️' : ''}</span>
+            <span style="font-size: 12px; opacity: 0.7;">${x.time || '—'}</span>
+          </div>
+          ${noteText ? `<div style="font-size: 12px; opacity: 0.8; margin-top: 4px; font-style: italic;">📝 ${noteText}</div>` : ''}
+        </div>
+      `;
     });
   }
   if(!html) html='<p style="color:var(--text-dim);text-align:center;padding:20px 0;">Kein Eintrag für diesen Tag.</p>';
