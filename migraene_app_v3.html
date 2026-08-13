@@ -291,6 +291,7 @@ body { background:var(--bg); color:var(--text); font-family:-apple-system,BlinkM
   <div class="section">
     <div class="section-title mc">Regelmässige Medikamente</div>
     <p style="font-size:12px;color:var(--text-dim);margin-bottom:12px;">Alle standardmässig als genommen — deaktivieren wenn nicht genommen.</p>
+    
     <div class="med-item">
       <div><div class="med-name">Elvanse</div></div>
       <div class="med-right">
@@ -298,19 +299,37 @@ body { background:var(--bg); color:var(--text); font-family:-apple-system,BlinkM
         <div class="med-toggle on" id="med-elvanse" onclick="toggleMed(this)"></div>
       </div>
     </div>
-    <div class="med-item">
+    
+    <!-- Betmiga (mit ID zum automatischen Ausblenden) -->
+    <div class="med-item" id="wrapper-betmiga">
       <div class="med-name">Betmiga</div>
       <div class="med-right"><div class="med-toggle on" id="med-betmiga" onclick="toggleMed(this)"></div></div>
     </div>
-    <div class="med-item">
+    
+    <!-- Toviaz (mit ID zum automatischen Ausblenden) -->
+    <div class="med-item" id="wrapper-toviaz">
       <div class="med-name">Toviaz</div>
       <div class="med-right"><div class="med-toggle on" id="med-toviaz" onclick="toggleMed(this)"></div></div>
     </div>
+
+    <!-- Obgemsa (NEU, wird ab 13. Aug eingeblendet) -->
+    <div class="med-item" id="wrapper-obgemsa" style="display: none;">
+      <div class="med-name">Obgemsa</div>
+      <div class="med-right"><div class="med-toggle on" id="med-obgemsa" onclick="toggleMed(this)"></div></div>
+    </div>
+    
+    <!-- Carvedilol (mit klickbarem Dosis-Button) -->
     <div class="med-item">
       <div class="med-name">Carvedilol</div>
-      <div class="med-right"><div class="med-toggle on" id="med-carvedilol" onclick="toggleMed(this)"></div></div>
+      <div class="med-right" style="display:flex; align-items:center; gap:8px;">
+        <div id="carvedilol-dose-btn" onclick="cycleCarvedilolDose()" style="cursor:pointer; font-size:11px; background:var(--bg-sec, #444); padding:2px 6px; border-radius:4px;" title="Tippen zum Ändern">
+          2x 3.125mg ✏️
+        </div>
+        <div class="med-toggle on" id="med-carvedilol" onclick="toggleMed(this)"></div>
+      </div>
     </div>
   </div>
+</div>
 
   <div class="section">
     <div class="section-title mc">Wetter</div>
@@ -1060,7 +1079,13 @@ function loadMorning(){
   document.getElementById('bedtime').value='';
   document.getElementById('waketime').value='';
   document.getElementById('sleep-dur').style.display='none';
-  ['elvanse','betmiga','toviaz','carvedilol'].forEach(m=>document.getElementById('med-'+m).className='med-toggle on');
+  
+  // HIER NEU: obgemsa hinzugefügt
+  ['elvanse','betmiga','toviaz','obgemsa','carvedilol'].forEach(m=>{
+      const el = document.getElementById('med-'+m);
+      if(el) el.className='med-toggle on';
+  });
+  
   document.getElementById('elvanse-dose').value='';
   document.getElementById('morning-notes').value='';
   if(d.bedtime){document.getElementById('bedtime').value=d.bedtime;}
@@ -1071,12 +1096,40 @@ function loadMorning(){
   if(d.energyM!==undefined) setV('energyM',d.energyM);
   if(d.elvanseDose) document.getElementById('elvanse-dose').value=d.elvanseDose;
   if(d.notes) document.getElementById('morning-notes').value=d.notes;
-  if(d.meds){['elvanse','betmiga','toviaz','carvedilol'].forEach(m=>{if(d.meds[m]===false)document.getElementById('med-'+m).classList.remove('on');});}
+  
+  // HIER NEU: obgemsa hinzugefügt
+  if(d.meds){
+      ['elvanse','betmiga','toviaz','obgemsa','carvedilol'].forEach(m=>{
+          const el = document.getElementById('med-'+m);
+          if(el && d.meds[m]===false) el.classList.remove('on');
+      });
+  }
+  
+  // --- NEU: DATUMS-LOGIK DIREKT BEIM LADEN DES MORGENS ---
+  const checkDate = new Date(currentDate);
+  checkDate.setHours(0,0,0,0);
+  const showObgemsa = checkDate >= new Date('2026-08-13');
+
+  const wBetmiga = document.getElementById('wrapper-betmiga');
+  const wToviaz = document.getElementById('wrapper-toviaz');
+  const wObgemsa = document.getElementById('wrapper-obgemsa');
+  
+  if(wBetmiga) wBetmiga.style.display = showObgemsa ? 'none' : 'flex';
+  if(wToviaz) wToviaz.style.display = showObgemsa ? 'none' : 'flex';
+  if(wObgemsa) wObgemsa.style.display = showObgemsa ? 'flex' : 'none';
+
+  // Carvedilol Dosis laden und anzeigen
+  const btnCarv = document.getElementById('carvedilol-dose-btn');
+  if (btnCarv) {
+      const carvDose = d.carvedilolDose || getDefaultCarvedilolDose(currentDate);
+      btnCarv.innerHTML = carvDose + ' ✏️';
+      btnCarv.dataset.dose = carvDose; // Speichert den aktuellen Wert unsichtbar im Button
+  }
+  // --------------------------------------------------------
+
   renderBP('bp-morning-list');
-  // Reset weather bar for this day
   const bar=document.getElementById('weather-bar');
   if(bar) bar.innerHTML=`<span class="weather-info" id="weather-info">Noch nicht geladen</span><button class="weather-load-btn" onclick="loadWeather()">🌤️ Laden</button>`;
-  // Auto-load weather if already cached for this day
   const wx=load('wx_'+dateKey(currentDate));
   if(wx&&wx.tempMax!==undefined) renderWeather(wx);
 }
@@ -1123,7 +1176,29 @@ function saveMorning(){
   const bed=document.getElementById('bedtime').value, wake=document.getElementById('waketime').value;
   let sleepDuration=null;
   if(bed&&wake){const[bh,bm]=bed.split(':').map(Number),[wh,wm]=wake.split(':').map(Number);let bM=bh*60+bm,wM=wh*60+wm;if(wM<=bM)wM+=24*60;sleepDuration=((wM-bM)/60).toFixed(1);}
-  save(mKey(currentDate),{bedtime:bed,waketime:wake,sleepDuration,sleepQ:getV('sleepQ'),breakfastMissed:getV('breakfastMissed'),energyM:getV('energyM'),elvanseDose:document.getElementById('elvanse-dose').value,notes:document.getElementById('morning-notes').value,meds:{elvanse:document.getElementById('med-elvanse').classList.contains('on'),betmiga:document.getElementById('med-betmiga').classList.contains('on'),toviaz:document.getElementById('med-toviaz').classList.contains('on'),carvedilol:document.getElementById('med-carvedilol').classList.contains('on')},savedAt:new Date().toISOString()});
+  
+  const carvDoseBtn = document.getElementById('carvedilol-dose-btn');
+  const customCarvDose = carvDoseBtn ? carvDoseBtn.dataset.dose : null;
+
+  save(mKey(currentDate),{
+      bedtime:bed,
+      waketime:wake,
+      sleepDuration,
+      sleepQ:getV('sleepQ'),
+      breakfastMissed:getV('breakfastMissed'),
+      energyM:getV('energyM'),
+      elvanseDose:document.getElementById('elvanse-dose').value,
+      notes:document.getElementById('morning-notes').value,
+      carvedilolDose: customCarvDose, // NEU: Speichert die Dosis
+      meds:{
+          elvanse:document.getElementById('med-elvanse').classList.contains('on'),
+          betmiga:document.getElementById('med-betmiga').classList.contains('on'),
+          toviaz:document.getElementById('med-toviaz').classList.contains('on'),
+          obgemsa:document.getElementById('med-obgemsa') ? document.getElementById('med-obgemsa').classList.contains('on') : false, // NEU: Speichert Obgemsa
+          carvedilol:document.getElementById('med-carvedilol').classList.contains('on')
+      },
+      savedAt:new Date().toISOString()
+  });
   showToast('☀️ Morgen gespeichert!');
 }
 
@@ -1445,6 +1520,35 @@ function showNoteModal(title, text) {
 }
 function hideNoteModal() {
   document.getElementById('noteModal').style.display = 'none';
+}
+
+// --- MEDIKAMENTEN LOGIK ---
+function getDefaultCarvedilolDose(date) {
+    const d = new Date(date);
+    d.setHours(0,0,0,0);
+    if (d >= new Date('2026-08-10')) return '2x 12.5mg';
+    if (d >= new Date('2026-08-03')) return '2x 6.25mg';
+    if (d >= new Date('2026-07-27')) return '2x 3.125mg';
+    return '2x 3.125mg';
+}
+
+function cycleCarvedilolDose() {
+    const btn = document.getElementById('carvedilol-dose-btn');
+    if (!btn) return;
+    
+    // Aktuelle Dosis auslesen (wurde beim Laden dort gespeichert)
+    const current = btn.dataset.dose || getDefaultCarvedilolDose(currentDate);
+    const steps = ['2x 3.125mg', '2x 6.25mg', '2x 12.5mg'];
+    
+    let idx = steps.indexOf(current);
+    let next = steps[(idx + 1) % steps.length];
+    
+    // Wert im HTML aktualisieren
+    btn.dataset.dose = next;
+    btn.innerHTML = next + ' ✏️';
+    
+    // Sofort in der Datenbank speichern!
+    saveMorning();
 }
 </script>
   
